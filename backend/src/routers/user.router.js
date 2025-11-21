@@ -1,5 +1,5 @@
 import express from 'express';
-import { createUser, getUserById, loginUser, getCurrentUser } from '../controllers/user.controller.js';
+import { createUser, getUserById, loginUser, getCurrentUser, updateUserProfile } from '../controllers/user.controller.js';
 import { uploadUserImage } from '../controllers/image.controller.js';
 import { authenticate } from '../middleware/auth.middleware.js';
 import { upload, handleUploadError } from '../middleware/upload.middleware.js';
@@ -40,5 +40,6 @@ router.post('/upload-image', authenticate, upload.single('image'), handleUploadE
  * @access  Private (requires authentication)
  */
 router.get('/:id', authenticate, getUserById);
+router.put('/update-profile', authenticate, updateUserProfile);
 
 export default router;

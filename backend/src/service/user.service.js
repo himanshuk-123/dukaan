@@ -136,6 +136,25 @@ export class UserService {
     }
   }
 
+  async updateProfile(userId, data) {
+
+  if (!userId) {
+    throw new ValidationError("User ID required");
+  }
+
+  if (!data.name) {
+    throw new ValidationError("Name is required");
+  }
+
+  const updatedUser = await this.userRepository.updateUserProfile(userId, data);
+
+  if (!updatedUser) {
+    throw new Error("Profile update failed");
+  }
+
+  return updatedUser;
+}
+
   async loginUser(email, password) {
     try {
       // Validate input

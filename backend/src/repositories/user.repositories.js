@@ -3,117 +3,146 @@ import sql from 'mssql';
 
 export class UserRepository {
 
-  /**
-   * Create a new user in the database
-   * @param {Object} userData - User data to insert
-   * @returns {Object} Created user data with user_id
-   * @throws {Error} Database operation errors
-   */
+  // ✅ CREATE USER
   async createUser(userData) {
     try {
       const { name, email, password_hash, phone_number, role } = userData;
       const pool = await poolPromise;
-      
-      // Insert user and return the created record
+
       const result = await pool.request()
         .input('name', sql.NVarChar(255), name)
         .input('email', sql.NVarChar(255), email)
         .input('password_hash', sql.NVarChar(255), password_hash)
         .input('phone_number', sql.NVarChar(15), phone_number)
-        .input('role', sql.NVarChar(50), role)
+        .input('role', sql.NVarChar(50), role || 'user')
+        .input('is_deleted', sql.Bit, 0)
         .query(`
-          INSERT INTO Users (name, email, password_hash, phone_number, role) 
-          OUTPUT INSERTED.user_id, INSERTED.name, INSERTED.email, INSERTED.phone_number, INSERTED.role, INSERTED.image_url, INSERTED.created_at
-          VALUES (@name, @email, @password_hash, @phone_number, @role)
+          INSERT INTO Users 
+          (name, email, password_hash, phone_number, role, is_deleted, deleted_at)
+          OUTPUT INSERTED.user_id, INSERTED.name, INSERTED.email,
+                 INSERTED.phone_number, INSERTED.role,
+                 INSERTED.image_url, INSERTED.created_at
+          VALUES 
+          (@name, @email, @password_hash, @phone_number, @role, @is_deleted, NULL)
         `);
 
-      if (result.recordset.length === 0) {
-        throw new Error('Failed to create user - no record returned');
-      }
-
       return result.recordset[0];
+
     } catch (error) {
       console.error('Database error in createUser:', error);
-      
-      // Handle specific SQL Server errors
-      if (error.number === 2627) { // Unique constraint violation
+
+      if (error.number === 2627) {
         throw new Error('User with this email already exists');
       }
-      
+
       throw new Error(`Database operation failed: ${error.message}`);
     }
   }
 
-  /**
-   * Find user by email address
-   * @param {string} email - User email to search for
-   * @returns {Object|null} User data or null if not found
-   * @throws {Error} Database operation errors
-   */
+
+  // ✅ FIND BY EMAIL (FIXED)
   async findByEmail(email) {
     try {
       const pool = await poolPromise;
+
       const result = await pool.request()
         .input('email', sql.NVarChar(255), email)
         .query(`
-          SELECT user_id, name, email, password_hash, phone_number, role, image_url, is_deleted, created_at 
-          FROM Users 
-          WHERE email = @email
+          SELECT user_id, name, email, password_hash,
+                 phone_number, role, image_url,
+                 created_at
+          FROM Users
+          WHERE email = @email AND is_deleted = 0
         `);
-      
+
       return result.recordset[0] || null;
+
     } catch (error) {
       console.error('Database error in findByEmail:', error);
       throw new Error(`Database operation failed: ${error.message}`);
     }
   }
 
-  /**
-   * Find user by ID
-   * @param {number} userId - User ID to search for
-   * @returns {Object|null} User data or null if not found
-   * @throws {Error} Database operation errors
-   */
+
+  // ✅ FIND BY ID (already mostly correct)
   async findById(userId) {
     try {
       const pool = await poolPromise;
+
       const result = await pool.request()
         .input('userId', sql.Int, userId)
         .query(`
-          SELECT user_id, name, email, phone_number, role, image_url, is_deleted, created_at 
-          FROM Users 
+          SELECT user_id, name, email,
+                 phone_number, role, image_url,
+                 created_at
+          FROM Users
           WHERE user_id = @userId AND is_deleted = 0
         `);
-      
+
       return result.recordset[0] || null;
+
     } catch (error) {
       console.error('Database error in findById:', error);
       throw new Error(`Database operation failed: ${error.message}`);
     }
   }
 
-  /**
-   * Update user image URL
-   * @param {number} userId - User ID
-   * @param {string} imageUrl - Image URL
-   * @returns {boolean} True if updated
-   */
+
+  // ✅ UPDATE IMAGE (FIXED)
   async updateImageUrl(userId, imageUrl) {
     try {
       const pool = await poolPromise;
+
       const result = await pool.request()
         .input('userId', sql.Int, userId)
         .input('imageUrl', sql.NVarChar(500), imageUrl)
         .query(`
           UPDATE Users
           SET image_url = @imageUrl
-          WHERE user_id = @userId
+          WHERE user_id = @userId AND is_deleted = 0
         `);
 
       return result.rowsAffected[0] > 0;
+
     } catch (error) {
       console.error('Database error in updateImageUrl:', error);
       throw new Error(`Database operation failed: ${error.message}`);
     }
   }
+
+
+  // ✅ UPDATE PROFILE (FIXED for your table)
+  async updateUserProfile(userId, data) {
+    try {
+      const pool = await poolPromise;
+
+      const result = await pool.request()
+        .input('userId', sql.Int, userId)
+        .input('name', sql.NVarChar(255), data.name)
+        .input('phone_number', sql.NVarChar(15), data.phone_number || null)
+        .input('image_url', sql.NVarChar(500), data.image_url || null)
+        .query(`
+          UPDATE Users
+          SET 
+            name = @name,
+            phone_number = @phone_number,
+            image_url = @image_url
+          OUTPUT INSERTED.user_id,
+                 INSERTED.name,
+                 INSERTED.email,
+                 INSERTED.phone_number,
+                 INSERTED.image_url,
+                 INSERTED.created_at
+          WHERE user_id = @userId
+          AND is_deleted = 0
+        `);
+
+      return result.recordset[0] || null;
+
+    } catch (error) {
+      console.error("DB error in updateUserProfile:", error);
+      throw new Error("Failed to update user profile");
+    }
+  }
+
 }

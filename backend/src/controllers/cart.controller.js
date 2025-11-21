@@ -4,31 +4,23 @@ import { ValidationError } from '../service/user.service.js';
 const cartService = new CartService();
 
 /**
- * Get cart (works for both guest and authenticated users)
+ * Get cart with items (authenticated users only)
  * @route GET /api/cart
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
  */
 export const getCart = async (req, res) => {
   try {
-    const userId = req.user ? req.user.user_id : null;
-    const guestId = req.guestId || null;
+    const userId = req.user.user_id;
 
-    if (!userId && !guestId) {
-      return res.status(400).json({
-        success: false,
-        message: 'Either authentication or guest ID is required'
-      });
-    }
-
-    const cart = await cartService.getCart(userId, guestId);
+    const cart = await cartService.getCart(userId);
 
     // Calculate total
     let total = 0;
     let itemCount = 0;
     if (cart.items && cart.items.length > 0) {
       cart.items.forEach(item => {
-        total += parseFloat(item.product.price) * item.quantity;
+       total += parseFloat(item.product.selling_price ?? item.product.base_price ?? 0) * item.quantity;
         itemCount += item.quantity;
       });
     }
@@ -55,22 +47,14 @@ export const getCart = async (req, res) => {
 };
 
 /**
- * Add item to cart (works for both guest and authenticated users)
+ * Add item to cart (authenticated users only)
  * @route POST /api/cart/items
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
  */
 export const addToCart = async (req, res) => {
   try {
-    const userId = req.user ? req.user.user_id : null;
-    const guestId = req.guestId || null;
-
-    if (!userId && !guestId) {
-      return res.status(400).json({
-        success: false,
-        message: 'Either authentication or guest ID is required'
-      });
-    }
+    const userId = req.user.user_id;
 
     const { product_id, quantity = 1 } = req.body;
 
@@ -82,7 +66,7 @@ export const addToCart = async (req, res) => {
       });
     }
 
-    const cartItem = await cartService.addToCart(userId, guestId, product_id, quantity);
+    const cartItem = await cartService.addToCart(userId, product_id, quantity);
 
     res.status(200).json({
       success: true,
@@ -109,22 +93,14 @@ export const addToCart = async (req, res) => {
 };
 
 /**
- * Update cart item quantity (works for both guest and authenticated users)
+ * Update cart item quantity (authenticated users only)
  * @route PUT /api/cart/items/:itemId
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
  */
 export const updateCartItem = async (req, res) => {
   try {
-    const userId = req.user ? req.user.user_id : null;
-    const guestId = req.guestId || null;
-
-    if (!userId && !guestId) {
-      return res.status(400).json({
-        success: false,
-        message: 'Either authentication or guest ID is required'
-      });
-    }
+    const userId = req.user.user_id;
 
     const { itemId } = req.params;
     const { quantity } = req.body;
@@ -137,7 +113,7 @@ export const updateCartItem = async (req, res) => {
       });
     }
 
-    const updatedItem = await cartService.updateCartItem(userId, guestId, itemId, quantity);
+    const updatedItem = await cartService.updateCartItem(userId, itemId, quantity);
 
     res.status(200).json({
       success: true,
@@ -164,26 +140,18 @@ export const updateCartItem = async (req, res) => {
 };
 
 /**
- * Remove item from cart (works for both guest and authenticated users)
+ * Remove item from cart (authenticated users only)
  * @route DELETE /api/cart/items/:itemId
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
  */
 export const removeCartItem = async (req, res) => {
   try {
-    const userId = req.user ? req.user.user_id : null;
-    const guestId = req.guestId || null;
-
-    if (!userId && !guestId) {
-      return res.status(400).json({
-        success: false,
-        message: 'Either authentication or guest ID is required'
-      });
-    }
+    const userId = req.user.user_id;
 
     const { itemId } = req.params;
 
-    await cartService.removeCartItem(userId, guestId, itemId);
+    await cartService.removeCartItem(userId, itemId);
 
     res.status(200).json({
       success: true,
@@ -209,24 +177,16 @@ export const removeCartItem = async (req, res) => {
 };
 
 /**
- * Clear cart (works for both guest and authenticated users)
+ * Clear cart (authenticated users only)
  * @route DELETE /api/cart
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
  */
 export const clearCart = async (req, res) => {
   try {
-    const userId = req.user ? req.user.user_id : null;
-    const guestId = req.guestId || null;
+    const userId = req.user.user_id;
 
-    if (!userId && !guestId) {
-      return res.status(400).json({
-        success: false,
-        message: 'Either authentication or guest ID is required'
-      });
-    }
-
-    await cartService.clearCart(userId, guestId);
+    await cartService.clearCart(userId);
 
     res.status(200).json({
       success: true,

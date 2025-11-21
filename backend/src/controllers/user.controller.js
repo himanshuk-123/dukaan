@@ -92,6 +92,37 @@ export const getUserById = async (req, res) => {
   }
 };
 
+// ✅ UPDATE USER PROFILE
+export const updateUserProfile = async (req, res) => {
+  try {
+    const userId = req.user.user_id;
+
+    const updatedUser = await userServiceInstance.updateProfile(userId, req.body);
+
+    res.status(200).json({
+      success: true,
+      message: "Profile updated successfully",
+      data: updatedUser,
+    });
+
+  } catch (error) {
+    console.error("Error in updateUserProfile:", error);
+
+    if (error instanceof ValidationError) {
+      return res.status(400).json({
+        success: false,
+        message: error.message
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to update profile"
+    });
+  }
+};
+
+
 /**
  * Login user
  * @route POST /api/users/login
@@ -100,7 +131,7 @@ export const getUserById = async (req, res) => {
  */
 export const loginUser = async (req, res) => {
   try {
-    const { email, password, guest_id } = req.body;
+    const { email, password } = req.body;
     
     if (!email || !password) {
       return res.status(400).json({
@@ -114,9 +145,9 @@ export const loginUser = async (req, res) => {
     
     // Merge guest cart to user cart if guest_id is provided
     let mergedCart = null;
-    if (guest_id && result.user && result.user.user_id) {
+    if (result.user && result.user.user_id) {
       try {
-        mergedCart = await cartService.mergeGuestCartToUser(guest_id, result.user.user_id);
+        mergedCart = await cartService.mergeGuestCartToUser(result.user.user_id);
       } catch (cartError) {
         // Log error but don't fail login if cart merge fails
         console.error('Error merging guest cart on login:', cartError);

@@ -2,119 +2,115 @@ import { poolPromise } from '../config/db.config.js';
 import sql from 'mssql';
 
 export class ProductRepository {
-  /**
-   * Get all active products by shop with pagination
-   * @param {Object} options - Query options (page, limit, search, shop_id)
-   * @returns {Object} Products data with pagination info
-   */
+
+  /* -------------------------------------------------------------------------- */
+  /*                FIND ALL PRODUCTS (WITH INVENTORY & SHOP)                  */
+  /* -------------------------------------------------------------------------- */
+
   async findAll(options = {}) {
     try {
       const { page = 1, limit = 20, search = '', shop_id = null } = options;
       const offset = (page - 1) * limit;
       const pool = await poolPromise;
 
-      // Build conditions
-      let whereConditions = ['p.is_deleted = 0', 'i.is_deleted = 0'];
+      let whereConditions = ['i.is_deleted = 0']; // inventory must not be deleted
       let searchCondition = '';
-      
-      if (shop_id) {
-        whereConditions.push('i.shop_id = @shop_id');
-      }
-      
-      if (search) {
-        searchCondition = `AND (p.name LIKE @search OR p.description LIKE @search)`;
-      }
+
+      if (shop_id) whereConditions.push('i.shop_id = @shop_id');
+      if (search) searchCondition = `AND (p.name LIKE @search OR p.description LIKE @search)`;
 
       const whereClause = whereConditions.join(' AND ');
 
-      // Get total count
-      const countRequest = pool.request();
-      if (shop_id) countRequest.input('shop_id', sql.Int, shop_id);
-      if (search) countRequest.input('search', sql.NVarChar, `%${search}%`);
-      
-      const countResult = await countRequest.query(`
-        SELECT COUNT(DISTINCT p.product_id) as total
+      // COUNT QUERY
+      const countReq = pool.request();
+      if (shop_id) countReq.input('shop_id', sql.Int, shop_id);
+      if (search) countReq.input('search', sql.NVarChar, `%${search}%`);
+
+      const countQuery = `
+        SELECT COUNT(DISTINCT p.product_id) AS total
         FROM Products p
-        INNER JOIN Inventory i ON p.product_id = i.product_id
+        INNER JOIN Inventory i 
+          ON p.product_id = i.product_id AND i.is_deleted = 0
         WHERE ${whereClause}
         ${searchCondition}
-      `);
+      `;
 
+      const countResult = await countReq.query(countQuery);
       const total = countResult.recordset[0].total;
 
-      // Get products
-      const productsRequest = pool.request();
-      if (shop_id) productsRequest.input('shop_id', sql.Int, shop_id);
-      if (search) productsRequest.input('search', sql.NVarChar, `%${search}%`);
-      productsRequest.input('limit', sql.Int, limit);
-      productsRequest.input('offset', sql.Int, offset);
+      // DATA QUERY
+      const dataReq = pool.request()
+        .input('limit', sql.Int, limit)
+        .input('offset', sql.Int, offset);
 
-      const productsResult = await productsRequest.query(`
-          SELECT 
-            p.product_id,
-            p.name,
-            p.description,
-            p.price,
-            p.image_url,
-            i.id as inventory_id,
-            i.shop_id,
-            i.stock_quantity,
-            i.selling_price,
-            p.created_at,
-            s.name as shop_name,
-            s.category as shop_category
-          FROM Products p
-          INNER JOIN Inventory i ON p.product_id = i.product_id
-          INNER JOIN Shops s ON i.shop_id = s.shop_id
-          WHERE ${whereClause}
-          ${searchCondition}
-          ORDER BY p.created_at DESC
-          OFFSET @offset ROWS
-          FETCH NEXT @limit ROWS ONLY
-      `);
+      if (shop_id) dataReq.input('shop_id', sql.Int, shop_id);
+      if (search) dataReq.input('search', sql.NVarChar, `%${search}%`);
+
+      const dataQuery = `
+        SELECT 
+          p.product_id,
+          p.name,
+          p.description,
+          p.Base_Price,
+          p.image_url,
+          p.created_at,
+
+          i.id AS inventory_id,
+          i.shop_id,
+          i.stock_quantity,
+          i.selling_price,
+
+          s.name AS shop_name
+        FROM Products p
+        INNER JOIN Inventory i 
+          ON p.product_id = i.product_id AND i.is_deleted = 0
+        INNER JOIN Shops s 
+          ON i.shop_id = s.shop_id
+        WHERE ${whereClause}
+        ${searchCondition}
+        ORDER BY p.created_at DESC
+        OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
+      `;
+
+      const productsResult = await dataReq.query(dataQuery);
 
       return {
         products: productsResult.recordset,
         pagination: {
-          total: total,
-          page: page,
-          limit: limit,
+          total,
+          page,
+          limit,
           totalPages: Math.ceil(total / limit)
         }
       };
     } catch (error) {
-      console.error('Database error in findAll products:', error);
+      console.error('Database error in findAll:', error);
       throw new Error(`Database operation failed: ${error.message}`);
     }
   }
 
-  /**
-   * Get products by shop ID
-   * @param {number} shopId - Shop ID
-   * @param {Object} options - Query options
-   * @returns {Object} Products with pagination
-   */
+  /* -------------------------------------------------------------------------- */
+  /*               FIND PRODUCTS BY SHOP (USES findAll())                      */
+  /* -------------------------------------------------------------------------- */
+
   async findByShopId(shopId, options = {}) {
     try {
       return await this.findAll({ ...options, shop_id: shopId });
     } catch (error) {
       console.error('Database error in findByShopId:', error);
-      throw new Error(`Database operation failed: ${error.message}`);
+      throw new Error(error.message);
     }
   }
 
-  /**
-   * Get product by ID (with shop info if available)
-   * @param {number} productId - Product ID
-   * @param {number|null} shopId - Optional shop ID to get shop-specific info
-   * @returns {Object|null} Product data or null if not found
-   */
+  /* -------------------------------------------------------------------------- */
+  /*              FIND PRODUCT BY ID (OPTIONAL SHOP + INVENTORY)               */
+  /* -------------------------------------------------------------------------- */
+
   async findById(productId, shopId = null) {
     try {
       const pool = await poolPromise;
-      
+
       if (shopId) {
-        // Get product with shop-specific inventory info
         const result = await pool.request()
           .input('productId', sql.Int, productId)
           .input('shopId', sql.Int, shopId)
@@ -123,146 +119,155 @@ export class ProductRepository {
               p.product_id,
               p.name,
               p.description,
-              p.price,
+              p.Base_Price,
               p.image_url,
               p.created_at,
-              i.id as inventory_id,
+
+              i.id AS inventory_id,
               i.shop_id,
               i.stock_quantity,
               i.selling_price,
-              s.name as shop_name,
-              s.category as shop_category
+
+              s.name AS shop_name,
+              s.category AS shop_category
             FROM Products p
-            LEFT JOIN Inventory i ON p.product_id = i.product_id AND i.shop_id = @shopId AND i.is_deleted = 0
-            LEFT JOIN Shops s ON i.shop_id = s.shop_id AND s.is_deleted = 0
-            WHERE p.product_id = @productId AND p.is_deleted = 0
+            LEFT JOIN Inventory i 
+              ON p.product_id = i.product_id 
+              AND i.shop_id = @shopId 
+              AND i.is_deleted = 0
+            LEFT JOIN Shops s 
+              ON i.shop_id = s.shop_id
+            WHERE p.product_id = @productId
           `);
-        return result.recordset[0] || null;
-      } else {
-        // Get basic product info
-        const result = await pool.request()
-          .input('productId', sql.Int, productId)
-          .query(`
-            SELECT 
-              product_id,
-              name,
-              description,
-              price,
-              image_url,
-              created_at
-            FROM Products
-            WHERE product_id = @productId AND is_deleted = 0
-          `);
+
         return result.recordset[0] || null;
       }
+
+      // Without shop — basic product only
+      const result = await pool.request()
+        .input('productId', sql.Int, productId)
+        .query(`
+          SELECT 
+            product_id,
+            name,
+            description,
+            Base_Price,
+            image_url,
+            created_at
+          FROM Products
+          WHERE product_id = @productId
+        `);
+
+      return result.recordset[0] || null;
+
     } catch (error) {
-      console.error('Database error in findById product:', error);
-      throw new Error(`Database operation failed: ${error.message}`);
+      console.error('Database error in findById:', error);
+      throw new Error(error.message);
     }
   }
 
-  /**
-   * Create a new product
-   * @param {Object} productData - Product data
-   * @returns {Object} Created product
-   */
+  /* -------------------------------------------------------------------------- */
+  /*                    CREATE PRODUCT (PRODUCTS TABLE)                         */
+  /* -------------------------------------------------------------------------- */
+
   async create(productData) {
     try {
-      const { name, description, price } = productData;
+      const { name, description, Base_Price, image_url = null } = productData;
       const pool = await poolPromise;
 
       const result = await pool.request()
         .input('name', sql.NVarChar(255), name)
         .input('description', sql.NVarChar(sql.MAX), description || null)
-        .input('price', sql.Decimal(10, 2), price)
+        .input('Base_Price', sql.Decimal(10, 2), Base_Price)
+        .input('image_url', sql.NVarChar(500), image_url)
         .query(`
-          INSERT INTO Products (name, description, price, stock_quantity)
-          OUTPUT INSERTED.product_id, INSERTED.name, INSERTED.description, INSERTED.price, INSERTED.image_url, INSERTED.created_at
-          VALUES (@name, @description, @price, 0)
+          INSERT INTO Products (name, description, Base_Price, image_url)
+          OUTPUT INSERTED.*
+          VALUES (@name, @description, @Base_Price, @image_url)
         `);
 
       return result.recordset[0];
+
     } catch (error) {
       console.error('Database error in create product:', error);
-      throw new Error(`Database operation failed: ${error.message}`);
+      throw new Error(error.message);
     }
   }
 
-  /**
-   * Update product
-   * @param {number} productId - Product ID
-   * @param {Object} productData - Updated product data
-   * @returns {Object|null} Updated product or null
-   */
+  /* -------------------------------------------------------------------------- */
+  /*                    UPDATE PRODUCT (PRODUCTS TABLE)                         */
+  /* -------------------------------------------------------------------------- */
+
   async update(productId, productData) {
     try {
-      const { name, description, price } = productData;
       const pool = await poolPromise;
 
-      const updates = [];
-      const request = pool.request().input('productId', sql.Int, productId);
+      let queryParts = [];
+      const req = pool.request().input('productId', sql.Int, productId);
 
-      if (name !== undefined) {
-        updates.push('name = @name');
-        request.input('name', sql.NVarChar(255), name);
-      }
-      if (description !== undefined) {
-        updates.push('description = @description');
-        request.input('description', sql.NVarChar(sql.MAX), description);
-      }
-      if (price !== undefined) {
-        updates.push('price = @price');
-        request.input('price', sql.Decimal(10, 2), price);
+      if (productData.name !== undefined) {
+        req.input('name', sql.NVarChar(255), productData.name);
+        queryParts.push('name = @name');
       }
 
-      if (updates.length === 0) {
+      if (productData.description !== undefined) {
+        req.input('description', sql.NVarChar(sql.MAX), productData.description);
+        queryParts.push('description = @description');
+      }
+
+      if (productData.Base_Price !== undefined) {
+        req.input('Base_Price', sql.Decimal(10, 2), productData.Base_Price);
+        queryParts.push('Base_Price = @Base_Price');
+      }
+
+      if (queryParts.length === 0) {
         throw new Error('No fields to update');
       }
 
-      const result = await request.query(`
+      const result = await req.query(`
         UPDATE Products
-        SET ${updates.join(', ')}
-        OUTPUT INSERTED.product_id, INSERTED.name, INSERTED.description, INSERTED.price, INSERTED.image_url, INSERTED.created_at
-        WHERE product_id = @productId AND is_deleted = 0
+        SET ${queryParts.join(', ')}
+        OUTPUT INSERTED.*
+        WHERE product_id = @productId
       `);
 
       return result.recordset[0] || null;
+
     } catch (error) {
       console.error('Database error in update product:', error);
-      throw new Error(`Database operation failed: ${error.message}`);
+      throw new Error(error.message);
     }
   }
 
-  /**
-   * Soft delete product
-   * @param {number} productId - Product ID
-   * @returns {boolean} True if deleted
-   */
-  async softDelete(productId) {
+  /* -------------------------------------------------------------------------- */
+  /*               UPDATE IMAGE URL IN PRODUCT TABLE                            */
+  /* -------------------------------------------------------------------------- */
+
+  async updateImageUrl(productId, imageUrl) {
     try {
       const pool = await poolPromise;
+
       const result = await pool.request()
         .input('productId', sql.Int, productId)
+        .input('imageUrl', sql.NVarChar(500), imageUrl)
         .query(`
           UPDATE Products
-          SET is_deleted = 1, deleted_at = GETDATE()
-          WHERE product_id = @productId AND is_deleted = 0
+          SET image_url = @imageUrl
+          WHERE product_id = @productId
         `);
 
       return result.rowsAffected[0] > 0;
+
     } catch (error) {
-      console.error('Database error in softDelete product:', error);
-      throw new Error(`Database operation failed: ${error.message}`);
+      console.error('Database error in updateImageUrl:', error);
+      throw new Error(error.message);
     }
   }
 
-  /**
-   * Add product to shop inventory
-   * @param {number} shopId - Shop ID
-   * @param {number} productId - Product ID
-   * @param {Object} inventoryData - Inventory data (stock_quantity, selling_price)
-   * @returns {Object} Created inventory entry
-   */
+  /* -------------------------------------------------------------------------- */
+  /*                  ADD PRODUCT TO SHOP INVENTORY                             */
+  /* -------------------------------------------------------------------------- */
+
   async addToInventory(shopId, productId, inventoryData) {
     try {
       const { stock_quantity, selling_price } = inventoryData;
@@ -275,107 +280,97 @@ export class ProductRepository {
         .input('selling_price', sql.Decimal(10, 2), selling_price)
         .query(`
           INSERT INTO Inventory (shop_id, product_id, stock_quantity, selling_price)
-          OUTPUT INSERTED.id, INSERTED.shop_id, INSERTED.product_id, INSERTED.stock_quantity, INSERTED.selling_price
+          OUTPUT INSERTED.*
           VALUES (@shopId, @productId, @stock_quantity, @selling_price)
         `);
 
       return result.recordset[0];
+
     } catch (error) {
-      console.error('Database error in addToInventory:', error);
-      
-      // Handle unique constraint violation (product already in shop inventory)
       if (error.number === 2627) {
-        throw new Error('Product already exists in shop inventory');
+        throw new Error('Product already exists in this shop inventory');
       }
-      
-      throw new Error(`Database operation failed: ${error.message}`);
+      console.error('Database error in addToInventory:', error);
+      throw new Error(error.message);
     }
   }
 
-  /**
-   * Update inventory entry
-   * @param {number} inventoryId - Inventory ID
-   * @param {Object} inventoryData - Updated inventory data
-   * @returns {Object|null} Updated inventory entry
-   */
+  /* -------------------------------------------------------------------------- */
+  /*                   UPDATE SHOP INVENTORY ENTRY                               */
+  /* -------------------------------------------------------------------------- */
+
   async updateInventory(inventoryId, inventoryData) {
     try {
-      const { stock_quantity, selling_price } = inventoryData;
       const pool = await poolPromise;
+      let updates = [];
+      const req = pool.request().input('inventoryId', sql.Int, inventoryId);
 
-      const updates = [];
-      const request = pool.request().input('inventoryId', sql.Int, inventoryId);
-
-      if (stock_quantity !== undefined) {
+      if (inventoryData.stock_quantity !== undefined) {
+        req.input('stock_quantity', sql.Int, inventoryData.stock_quantity);
         updates.push('stock_quantity = @stock_quantity');
-        request.input('stock_quantity', sql.Int, stock_quantity);
       }
-      if (selling_price !== undefined) {
+
+      if (inventoryData.selling_price !== undefined) {
+        req.input('selling_price', sql.Decimal(10, 2), inventoryData.selling_price);
         updates.push('selling_price = @selling_price');
-        request.input('selling_price', sql.Decimal(10, 2), selling_price);
       }
 
       if (updates.length === 0) {
         throw new Error('No fields to update');
       }
 
-      const result = await request.query(`
+      const query = `
         UPDATE Inventory
         SET ${updates.join(', ')}
-        OUTPUT INSERTED.id, INSERTED.shop_id, INSERTED.product_id, INSERTED.stock_quantity, INSERTED.selling_price
+        OUTPUT INSERTED.*
         WHERE id = @inventoryId AND is_deleted = 0
-      `);
+      `;
 
+      const result = await req.query(query);
       return result.recordset[0] || null;
+
     } catch (error) {
       console.error('Database error in updateInventory:', error);
-      throw new Error(`Database operation failed: ${error.message}`);
+      throw new Error(error.message);
     }
   }
 
-  /**
-   * Get inventory entry by shop and product
-   * @param {number} shopId - Shop ID
-   * @param {number} productId - Product ID
-   * @returns {Object|null} Inventory entry or null
-   */
+  /* -------------------------------------------------------------------------- */
+  /*      GET INVENTORY ENTRY BY SHOP + PRODUCT (USEFUL FOR CART CHECK)        */
+  /* -------------------------------------------------------------------------- */
+
   async getInventoryByShopAndProduct(shopId, productId) {
     try {
       const pool = await poolPromise;
+
       const result = await pool.request()
         .input('shopId', sql.Int, shopId)
         .input('productId', sql.Int, productId)
         .query(`
-          SELECT 
-            id,
-            shop_id,
-            product_id,
-            stock_quantity,
-            selling_price,
-            is_deleted
+          SELECT *
           FROM Inventory
-          WHERE shop_id = @shopId AND product_id = @productId AND is_deleted = 0
+          WHERE shop_id = @shopId 
+            AND product_id = @productId
+            AND is_deleted = 0
         `);
 
       return result.recordset[0] || null;
+
     } catch (error) {
       console.error('Database error in getInventoryByShopAndProduct:', error);
-      throw new Error(`Database operation failed: ${error.message}`);
+      throw new Error(error.message);
     }
   }
 
-  /**
-   * Check if product exists and is available in shop
-   * @param {number} productId - Product ID
-   * @param {number|null} shopId - Shop ID (optional)
-   * @returns {Object|null} Product availability info
-   */
+  /* -------------------------------------------------------------------------- */
+  /*                        CHECK PRODUCT AVAILABILITY                          */
+  /* -------------------------------------------------------------------------- */
+
   async checkAvailability(productId, shopId = null) {
     try {
       const pool = await poolPromise;
-      
+
       if (shopId) {
-        // Check availability in specific shop
         const result = await pool.request()
           .input('productId', sql.Int, productId)
           .input('shopId', sql.Int, shopId)
@@ -383,147 +378,145 @@ export class ProductRepository {
             SELECT 
               p.product_id,
               i.stock_quantity,
-              p.is_deleted as product_deleted,
-              i.is_deleted as inventory_deleted
+              i.selling_price,
+              i.is_deleted
             FROM Products p
-            LEFT JOIN Inventory i ON p.product_id = i.product_id AND i.shop_id = @shopId
+            LEFT JOIN Inventory i 
+              ON p.product_id = i.product_id 
+              AND i.shop_id = @shopId
             WHERE p.product_id = @productId
           `);
 
-        if (!result.recordset[0]) {
-          return null;
-        }
+        if (!result.recordset[0]) return null;
 
-        const data = result.recordset[0];
+        const row = result.recordset[0];
         return {
           exists: true,
-          available: !data.product_deleted && !data.inventory_deleted && (data.stock_quantity || 0) > 0,
-          stock_quantity: data.stock_quantity || 0,
-          in_shop: !!data.stock_quantity
-        };
-      } else {
-        // Check general availability
-        const result = await pool.request()
-          .input('productId', sql.Int, productId)
-          .query(`
-            SELECT 
-              product_id,
-              stock_quantity,
-              is_deleted
-            FROM Products
-            WHERE product_id = @productId
-          `);
-
-        if (!result.recordset[0]) {
-          return null;
-        }
-
-        const product = result.recordset[0];
-        return {
-          exists: true,
-          available: !product.is_deleted && product.stock_quantity > 0,
-          stock_quantity: product.stock_quantity
+          available: row.stock_quantity > 0 && row.is_deleted === false,
+          stock_quantity: row.stock_quantity || 0,
+          selling_price: row.selling_price || null,
+          in_shop: row.stock_quantity != null
         };
       }
+
+      // Check availability across all shops
+      const result = await pool.request()
+        .input('productId', sql.Int, productId)
+        .query(`
+          SELECT 
+            p.product_id,
+            SUM(CASE WHEN i.is_deleted = 0 THEN i.stock_quantity ELSE 0 END) AS total_stock
+          FROM Products p
+          LEFT JOIN Inventory i 
+            ON p.product_id = i.product_id
+          WHERE p.product_id = @productId
+          GROUP BY p.product_id
+        `);
+
+      if (!result.recordset[0]) return null;
+
+      const data = result.recordset[0];
+
+      return {
+        exists: true,
+        available: data.total_stock > 0,
+        stock_quantity: data.total_stock
+      };
+
     } catch (error) {
       console.error('Database error in checkAvailability:', error);
-      throw new Error(`Database operation failed: ${error.message}`);
+      throw new Error(error.message);
     }
   }
 
-  /**
-   * Check if product belongs to owner (via shop ownership)
-   * @param {number} productId - Product ID
-   * @param {number} ownerId - Owner (user) ID
-   * @returns {boolean} True if product belongs to owner's shop
-   */
+  /* -------------------------------------------------------------------------- */
+  /*                    VERIFY PRODUCT BELONGS TO OWNER                         */
+  /* -------------------------------------------------------------------------- */
+
   async isProductOwner(productId, ownerId) {
     try {
       const pool = await poolPromise;
+
       const result = await pool.request()
         .input('productId', sql.Int, productId)
         .input('ownerId', sql.Int, ownerId)
         .query(`
-          SELECT COUNT(*) as count
-          FROM Products p
-          INNER JOIN Inventory i ON p.product_id = i.product_id
-          INNER JOIN Shops s ON i.shop_id = s.shop_id
-          WHERE p.product_id = @productId 
-            AND s.owner_id = @ownerId 
-            AND p.is_deleted = 0 
+          SELECT COUNT(*) AS count
+          FROM Inventory i
+          INNER JOIN Shops s 
+            ON i.shop_id = s.shop_id
+          WHERE i.product_id = @productId
             AND i.is_deleted = 0
+            AND s.owner_id = @ownerId
         `);
 
       return result.recordset[0].count > 0;
+
     } catch (error) {
       console.error('Database error in isProductOwner:', error);
-      throw new Error(`Database operation failed: ${error.message}`);
+      throw new Error(error.message);
     }
   }
 
-  /**
-   * Check if inventory entry belongs to owner (via shop ownership)
-   * @param {number} inventoryId - Inventory ID
-   * @param {number} ownerId - Owner (user) ID
-   * @returns {boolean} True if inventory belongs to owner's shop
-   */
+  /* -------------------------------------------------------------------------- */
+  /*                    VERIFY INVENTORY ENTRY BELONGS TO OWNER                 */
+  /* -------------------------------------------------------------------------- */
+
   async isInventoryOwner(inventoryId, ownerId) {
     try {
       const pool = await poolPromise;
+
       const result = await pool.request()
         .input('inventoryId', sql.Int, inventoryId)
         .input('ownerId', sql.Int, ownerId)
         .query(`
-          SELECT COUNT(*) as count
+          SELECT COUNT(*) AS count
           FROM Inventory i
-          INNER JOIN Shops s ON i.shop_id = s.shop_id
-          WHERE i.id = @inventoryId 
-            AND s.owner_id = @ownerId 
+          INNER JOIN Shops s 
+            ON i.shop_id = s.shop_id
+          WHERE i.id = @inventoryId
             AND i.is_deleted = 0
+            AND s.owner_id = @ownerId
         `);
 
       return result.recordset[0].count > 0;
+
     } catch (error) {
       console.error('Database error in isInventoryOwner:', error);
-      throw new Error(`Database operation failed: ${error.message}`);
+      throw new Error(error.message);
     }
   }
 
-  /**
-   * Get products by shop owner
-   * @param {number} ownerId - Owner (user) ID
-   * @param {number|null} shopId - Optional shop ID filter
-   * @param {Object} options - Query options
-   * @returns {Object} Products with pagination
-   */
+  /* -------------------------------------------------------------------------- */
+  /*               FIND PRODUCTS BY OWNER (MULTIPLE SHOPS)                      */
+  /* -------------------------------------------------------------------------- */
+
   async findByOwner(ownerId, shopId = null, options = {}) {
     try {
       const { page = 1, limit = 20, search = '' } = options;
       const offset = (page - 1) * limit;
       const pool = await poolPromise;
 
-      let whereConditions = ['p.is_deleted = 0', 'i.is_deleted = 0', 's.owner_id = @ownerId'];
+      let whereConditions = [
+        'i.is_deleted = 0',
+        's.owner_id = @ownerId'
+      ];
+
       let searchCondition = '';
-      
-      if (shopId) {
-        whereConditions.push('i.shop_id = @shop_id');
-      }
-      
-      if (search) {
-        searchCondition = `AND (p.name LIKE @search OR p.description LIKE @search)`;
-      }
+      if (shopId) whereConditions.push('i.shop_id = @shopId');
+      if (search) searchCondition = `AND (p.name LIKE @search OR p.description LIKE @search)`;
 
       const whereClause = whereConditions.join(' AND ');
 
-      const countRequest = pool.request()
-        .input('ownerId', sql.Int, ownerId);
-      if (shopId) countRequest.input('shop_id', sql.Int, shopId);
-      if (search) countRequest.input('search', sql.NVarChar, `%${search}%`);
-      
-      const countResult = await countRequest.query(`
-        SELECT COUNT(DISTINCT p.product_id) as total
+      // Count Query
+      const countReq = pool.request().input('ownerId', sql.Int, ownerId);
+      if (shopId) countReq.input('shopId', sql.Int, shopId);
+      if (search) countReq.input('search', sql.NVarChar, `%${search}%`);
+
+      const countResult = await countReq.query(`
+        SELECT COUNT(DISTINCT p.product_id) AS total
         FROM Products p
-        INNER JOIN Inventory i ON p.product_id = i.product_id
+        INNER JOIN Inventory i ON p.product_id = i.product_id AND i.is_deleted = 0
         INNER JOIN Shops s ON i.shop_id = s.shop_id
         WHERE ${whereClause}
         ${searchCondition}
@@ -531,77 +524,55 @@ export class ProductRepository {
 
       const total = countResult.recordset[0].total;
 
-      const productsRequest = pool.request()
-        .input('ownerId', sql.Int, ownerId);
-      if (shopId) productsRequest.input('shop_id', sql.Int, shopId);
-      if (search) productsRequest.input('search', sql.NVarChar, `%${search}%`);
-      productsRequest.input('limit', sql.Int, limit);
-      productsRequest.input('offset', sql.Int, offset);
+      // Fetch products
+      const req = pool.request()
+        .input('ownerId', sql.Int, ownerId)
+        .input('offset', sql.Int, offset)
+        .input('limit', sql.Int, limit);
 
-      const productsResult = await productsRequest.query(`
+      if (shopId) req.input('shopId', sql.Int, shopId);
+      if (search) req.input('search', sql.NVarChar, `%${search}%`);
+
+      const productsResult = await req.query(`
         SELECT 
           p.product_id,
           p.name,
           p.description,
-          p.price,
+          p.Base_Price,
           p.image_url,
-          i.id as inventory_id,
+          p.created_at,
+
+          i.id AS inventory_id,
           i.shop_id,
           i.stock_quantity,
           i.selling_price,
-          p.created_at,
-          s.name as shop_name
+
+          s.name AS shop_name
         FROM Products p
-        INNER JOIN Inventory i ON p.product_id = i.product_id
-        INNER JOIN Shops s ON i.shop_id = s.shop_id
+        INNER JOIN Inventory i 
+          ON p.product_id = i.product_id AND i.is_deleted = 0
+        INNER JOIN Shops s 
+          ON i.shop_id = s.shop_id
         WHERE ${whereClause}
         ${searchCondition}
         ORDER BY p.created_at DESC
-        OFFSET @offset ROWS
-        FETCH NEXT @limit ROWS ONLY
+        OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
       `);
 
       return {
         products: productsResult.recordset,
         pagination: {
-          total: total,
-          page: page,
-          limit: limit,
+          total,
+          page,
+          limit,
           totalPages: Math.ceil(total / limit)
         }
       };
+
     } catch (error) {
       console.error('Database error in findByOwner:', error);
-      throw new Error(`Database operation failed: ${error.message}`);
+      throw new Error(error.message);
     }
   }
 
-  /**
-   * Update product image URL
-   * @param {number} productId - Product ID
-   * @param {string} imageUrl - Image URL
-   * @returns {boolean} True if updated
-   */
-  async updateImageUrl(productId, imageUrl) {
-    try {
-      const pool = await poolPromise;
-      const result = await pool.request()
-        .input('productId', sql.Int, productId)
-        .input('imageUrl', sql.NVarChar(500), imageUrl)
-        .query(`
-          UPDATE Products
-          SET image_url = @imageUrl
-          WHERE product_id = @productId
-        `);
-
-      return result.rowsAffected[0] > 0;
-    } catch (error) {
-      console.error('Database error in updateImageUrl:', error);
-      throw new Error(`Database operation failed: ${error.message}`);
-    }
-  }
 }
-
-
-
-

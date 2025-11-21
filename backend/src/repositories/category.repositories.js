@@ -1,5 +1,5 @@
-import { poolPromise } from '../config/db.config.js';
-import sql from 'mssql';
+import { poolPromise } from "../config/db.config.js";
+import sql from "mssql";
 
 export class CategoryRepository {
   /**
@@ -9,20 +9,23 @@ export class CategoryRepository {
   async findAll() {
     try {
       const pool = await poolPromise;
-      const result = await pool.request()
-        .query(`
-          SELECT DISTINCT 
-            category,
-            COUNT(DISTINCT shop_id) as shop_count
-          FROM Shops
-          WHERE is_deleted = 0 AND is_active = 1
-          GROUP BY category
-          ORDER BY category ASC
+      const result = await pool.request().query(`
+          SELECT 
+    c.cat_id,
+    c.name,
+    c.description,
+    COUNT(s.shop_id) AS shops
+FROM Categories c
+LEFT JOIN Shops s ON s.cat_id = c.cat_id
+GROUP BY 
+    c.cat_id,
+    c.name,
+    c.description;
         `);
 
       return result.recordset;
     } catch (error) {
-      console.error('Database error in findAll categories:', error);
+      console.error("Database error in findAll categories:", error);
       throw new Error(`Database operation failed: ${error.message}`);
     }
   }
@@ -35,20 +38,20 @@ export class CategoryRepository {
    */
   async getShopsByCategory(category, options = {}) {
     try {
-      const { page = 1, limit = 20, search = '' } = options;
+      const { page = 1, limit = 20, search = "" } = options;
       const offset = (page - 1) * limit;
       const pool = await poolPromise;
 
-      let searchCondition = '';
+      let searchCondition = "";
       if (search) {
         searchCondition = `AND (s.name LIKE @search OR s.description LIKE @search)`;
       }
 
       // Get total count
-      const countResult = await pool.request()
-        .input('category', sql.NVarChar(100), category)
-        .input('search', sql.NVarChar, `%${search}%`)
-        .query(`
+      const countResult = await pool
+        .request()
+        .input("category", sql.NVarChar(100), category)
+        .input("search", sql.NVarChar, `%${search}%`).query(`
           SELECT COUNT(*) as total
           FROM Shops s
           WHERE s.category = @category 
@@ -60,12 +63,12 @@ export class CategoryRepository {
       const total = countResult.recordset[0].total;
 
       // Get shops
-      const shopsResult = await pool.request()
-        .input('category', sql.NVarChar(100), category)
-        .input('search', sql.NVarChar, `%${search}%`)
-        .input('limit', sql.Int, limit)
-        .input('offset', sql.Int, offset)
-        .query(`
+      const shopsResult = await pool
+        .request()
+        .input("category", sql.NVarChar(100), category)
+        .input("search", sql.NVarChar, `%${search}%`)
+        .input("limit", sql.Int, limit)
+        .input("offset", sql.Int, offset).query(`
           SELECT 
             s.shop_id,
             s.owner_id,
@@ -97,13 +100,12 @@ export class CategoryRepository {
           total: total,
           page: page,
           limit: limit,
-          totalPages: Math.ceil(total / limit)
-        }
+          totalPages: Math.ceil(total / limit),
+        },
       };
     } catch (error) {
-      console.error('Database error in getShopsByCategory:', error);
+      console.error("Database error in getShopsByCategory:", error);
       throw new Error(`Database operation failed: ${error.message}`);
     }
   }
 }
-

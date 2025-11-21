@@ -118,7 +118,7 @@ export class ShopRepository {
    * @param {Object} options - Pagination options
    * @returns {Object} Shops with pagination
    */
-  async findByCategory(category, options = {}) {
+  async findByCategory(cat_id, options = {}) {
     try {
       const { page = 1, limit = 20, search = '' } = options;
       const offset = (page - 1) * limit;
@@ -130,19 +130,19 @@ export class ShopRepository {
       }
 
       const countResult = await pool.request()
-        .input('category', sql.NVarChar(100), category)
+        .input('cat_id', sql.NVarChar(100), cat_id)
         .input('search', sql.NVarChar, `%${search}%`)
         .query(`
           SELECT COUNT(*) as total
           FROM Shops s
-          WHERE s.category = @category AND s.is_deleted = 0 AND s.is_active = 1
+          WHERE s.cat_id = @cat_id AND s.is_deleted = 0 AND s.is_active = 1
           ${searchCondition}
         `);
 
       const total = countResult.recordset[0].total;
 
       const shopsResult = await pool.request()
-        .input('category', sql.NVarChar(100), category)
+        .input('cat_id', sql.NVarChar(100), cat_id)
         .input('search', sql.NVarChar, `%${search}%`)
         .input('limit', sql.Int, limit)
         .input('offset', sql.Int, offset)
@@ -152,7 +152,6 @@ export class ShopRepository {
             s.owner_id,
             s.name,
             s.description,
-            s.category,
             s.address,
             s.pincode,
             s.latitude,
@@ -163,7 +162,7 @@ export class ShopRepository {
             u.name as owner_name
           FROM Shops s
           INNER JOIN Users u ON s.owner_id = u.user_id
-          WHERE s.category = @category AND s.is_deleted = 0 AND s.is_active = 1
+          WHERE s.cat_id = @cat_id AND s.is_deleted = 0 AND s.is_active = 1
           ${searchCondition}
           ORDER BY s.created_at DESC
           OFFSET @offset ROWS
