@@ -1,17 +1,31 @@
+import { View, Text, Platform, StatusBar } from 'react-native'
 import React from 'react'
-import LoginScreen from './src/screens/Authentication/LoginScreen'
-import { NavigationContainer } from '@react-navigation/native'
-import { createStackNavigator } from '@react-navigation/stack'
-
-const Stack = createStackNavigator()
-
-  const App = () => {
+import RootNavigator from './src/navigation/RootNavigator'
+import { AuthProvider } from './src/context/AuthContext'
+import { CartProvider } from './src/context/CartContext'
+import { AddressProvider } from './src/context/AddressContext'
+import { OrderProvider } from './src/context/OrderContext'
+const App = () => {
   return (
-    <NavigationContainer>
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="Login" component={LoginScreen} />
-        </Stack.Navigator>
-    </NavigationContainer>
+    <AuthProvider>
+        <AddressProvider>
+      <CartProvider>
+         <OrderProvider>
+        {Platform.OS === 'android' && (
+          <View style={{ height: StatusBar.currentHeight, backgroundColor: '#1d740cff' }} />
+        )}
+        <StatusBar 
+          backgroundColor="#086614ff" 
+          style="light" 
+          barStyle="light-content"
+          hidden={false} 
+          translucent={true} 
+        />
+        <RootNavigator />
+        </OrderProvider>
+      </CartProvider>
+      </AddressProvider>
+    </AuthProvider>
   )
 }
 

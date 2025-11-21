@@ -1,0 +1,171 @@
+// MANUALLY COPY THIS CONTENT TO: src/context/CartContext.js
+
+import React, {createContext, useState, useContext, useEffect} from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import {cartService} from '../services';
+import {useAuth} from './AuthContext';
+
+const CartContext = createContext();
+
+export const CartProvider = ({children}) => {
+  const [cart, setCart] = useState({
+    items: [],
+    item_count: 0,
+    total_amount: 0,
+  });
+  const [isLoading, setIsLoading] = useState(false);
+  const [guestId, setGuestId] = useState(null);
+  const {user, isAuthenticated} = useAuth();
+
+  // Generate or retrieve guest ID
+  useEffect(() => {
+    const initializeGuestId = async () => {
+      try {
+        let storedGuestId = await AsyncStorage.getItem('guestId');
+        if (!storedGuestId) {
+          storedGuestId = `guest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          await AsyncStorage.setItem('guestId', storedGuestId);
+        }
+        setGuestId(storedGuestId);
+      } catch (error) {
+        console.error('Error initializing guest ID:', error);
+      }
+    };
+
+    initializeGuestId();
+  }, []);
+
+  // Fetch cart on mount and when auth state changes
+  useEffect(() => {
+    if (guestId || isAuthenticated) {
+      fetchCart();
+    }
+  }, [guestId, isAuthenticated]);
+
+  // Clear guest ID on login
+  useEffect(() => {
+    const clearGuestIdOnLogin = async () => {
+      if (isAuthenticated && guestId) {
+        await AsyncStorage.removeItem('guestId');
+        setGuestId(null);
+      }
+    };
+    clearGuestIdOnLogin();
+  }, [isAuthenticated]);
+
+  const fetchCart = async () => {
+    try {
+      setIsLoading(true);
+      const response = await cartService.getCart(guestId);
+      
+      if (response.success) {
+        setCart({
+          items: response.data.items || [],
+          item_count: response.data.item_count || 0,
+          total_amount: response.data.total_amount || 0,
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching cart:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const addToCart = async (productId, quantity = 1, shopId) => {
+    try {
+      setIsLoading(true);
+      const response = await cartService.addToCart({
+        product_id: productId,
+        quantity,
+        shop_id: shopId,
+        guest_id: !isAuthenticated ? guestId : undefined,
+      });
+
+      if (response.success) {
+        await fetchCart();
+        return response;
+      }
+    } catch (error) {
+      console.error('Error adding to cart:', error);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const updateCartItem = async (itemId, quantity) => {
+    try {
+      setIsLoading(true);
+      const response = await cartService.updateCartItem(itemId, quantity, guestId);
+
+      if (response.success) {
+        await fetchCart();
+        return response;
+      }
+    } catch (error) {
+      console.error('Error updating cart item:', error);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const removeCartItem = async (itemId) => {
+    try {
+      setIsLoading(true);
+      const response = await cartService.removeCartItem(itemId, guestId);
+
+      if (response.success) {
+        await fetchCart();
+        return response;
+      }
+    } catch (error) {
+      console.error('Error removing cart item:', error);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const clearCart = async () => {
+    try {
+      setIsLoading(true);
+      const response = await cartService.clearCart(guestId);
+
+      if (response.success) {
+        setCart({
+          items: [],
+          item_count: 0,
+          total_amount: 0,
+        });
+        return response;
+      }
+    } catch (error) {
+      console.error('Error clearing cart:', error);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const value = {
+    cart,
+    isLoading,
+    fetchCart,
+    addToCart,
+    updateCartItem,
+    removeCartItem,
+    clearCart,
+  };
+
+  return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
+};
+
+export const useCart = () => {
+  const context = useContext(CartContext);
+  if (!context) {
+    throw new Error('useCart must be used within a CartProvider');
+  }
+  return context;
+};

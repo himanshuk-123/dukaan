@@ -1,171 +1,96 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
+  ScrollView,
+  Alert,
+  ActivityIndicator,
   Animated,
-  Easing,
+  Image,
   KeyboardAvoidingView,
   Platform,
-  ScrollView,
-  Dimensions,
-  Alert,
 } from 'react-native';
-
-// import {MaterialCommunityIcons} from '@react-native-vector-icons/material-community';
-
-const { width, height } = Dimensions.get('window');
-
+import Icon from 'react-native-vector-icons/Ionicons';
+import {useAuth} from '../../context/AuthContext';
 const LoginScreen = ({ navigation }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
-
-  // Floating label animations
-  const emailLabelAnim = useRef(new Animated.Value(0)).current;
-  const passwordLabelAnim = useRef(new Animated.Value(0)).current;
-  const formSlideAnim = useRef(new Animated.Value(30)).current;
-  const formFadeAnim = useRef(new Animated.Value(0)).current;
-
-  React.useEffect(() => {
-    Animated.parallel([
-      Animated.timing(formSlideAnim, {
-        toValue: 0,
-        duration: 600,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.timing(formFadeAnim, {
-        toValue: 1,
-        duration: 600,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, []);
-
-  const animateLabel = (anim, toValue) => {
-    Animated.timing(anim, {
-      toValue,
-      duration: 200,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: false,
-    }).start();
-  };
-
-  const handleEmailFocus = () => {
-    animateLabel(emailLabelAnim, 1);
-  };
-
-  const handleEmailBlur = () => {
-    if (!email) {
-      animateLabel(emailLabelAnim, 0);
-    }
-  };
-
-  const handlePasswordFocus = () => {
-    animateLabel(passwordLabelAnim, 1);
-  };
-
-  const handlePasswordBlur = () => {
-    if (!password) {
-      animateLabel(passwordLabelAnim, 0);
-    }
-  };
-
-  const validateForm = () => {
+  const [buttonScale] = useState(new Animated.Value(1));
+  const { login } = useAuth();
+  // Input validation
+  const validateInputs = () => {
     const newErrors = {};
-    
+
+    // Email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!email) {
       newErrors.email = 'Email is required';
     } else if (!emailRegex.test(email)) {
       newErrors.email = 'Please enter a valid email';
     }
-    
+
+    // Password validation
     if (!password) {
       newErrors.password = 'Password is required';
     } else if (password.length < 6) {
       newErrors.password = 'Password must be at least 6 characters';
     }
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
+  // Handle login
   const handleLogin = async () => {
-    if (!validateForm()) return;
+    if (!validateInputs()) return;
 
-    setIsLoading(true);
-
+    setLoading(true);
+    
     // Simulate API call
-    setTimeout(() => {
-      setIsLoading(false);
-      Alert.alert('Welcome!', 'Successfully logged in to Dukaan');
-      // navigation.navigate('Home');
-    }, 1500);
+    try {
+      const response = await login(email, password);
+      if (response.success) {
+        Alert.alert('Success', 'Login successful!');
+      } else {
+        Alert.alert('Error', response.message || 'Login failed. Please try again.');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Login failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleForgotPassword = () => {
-    Alert.alert('Reset Password', 'Password reset feature will be implemented');
+  // Button animation
+  const animateButton = () => {
+    Animated.sequence([
+      Animated.timing(buttonScale, {
+        toValue: 0.95,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(buttonScale, {
+        toValue: 1,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+    ]).start();
   };
 
-  const handleSignUp = () => {
-    Alert.alert('Sign Up', 'Navigate to registration screen');
-    // navigation.navigate('Register');
-  };
-
-  const togglePasswordVisibility = () => {
-    setShowPassword(!showPassword);
-  };
-
-  // Floating label styles
-  const emailLabelStyle = {
-    position: 'absolute',
-    left: 15,
-    top: emailLabelAnim.interpolate({
-      inputRange: [0, 1],
-      outputRange: [18, -8],
-    }),
-    fontSize: emailLabelAnim.interpolate({
-      inputRange: [0, 1],
-      outputRange: [16, 12],
-    }),
-    color: emailLabelAnim.interpolate({
-      inputRange: [0, 1],
-      outputRange: ['#808080', '#008080'],
-    }),
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 4,
-    zIndex: 1,
-  };
-
-  const passwordLabelStyle = {
-    position: 'absolute',
-    left: 15,
-    top: passwordLabelAnim.interpolate({
-      inputRange: [0, 1],
-      outputRange: [18, -8],
-    }),
-    fontSize: passwordLabelAnim.interpolate({
-      inputRange: [0, 1],
-      outputRange: [16, 12],
-    }),
-    color: passwordLabelAnim.interpolate({
-      inputRange: [0, 1],
-      outputRange: ['#808080', '#008080'],
-    }),
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 4,
-    zIndex: 1,
+  const handleLoginPress = () => {
+    animateButton();
+    handleLogin();
   };
 
   return (
-    <KeyboardAvoidingView 
+    <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
@@ -173,124 +98,107 @@ const LoginScreen = ({ navigation }) => {
         contentContainerStyle={styles.scrollContainer}
         showsVerticalScrollIndicator={false}
       >
-        {/* Top Branding Section */}
-        <View style={styles.brandingContainer}>
-          {/* <View style={styles.logoContainer}>
-            <MaterialCommunityIcons name="storefront" size={48} color="#008080" />
-          </View> */}
-          <Text style={styles.welcomeText}>Welcome Back!</Text>
-          <Text style={styles.subtitleText}>Log In to Your Market</Text>
+        {/* App Logo */}
+        <View style={styles.logoContainer}>
+          <View style={styles.logo}>
+            <Icon name="storefront" size={60} color="#4CAF50" />
+          </View>
+          <Text style={styles.appName}>Local Market</Text>
+          <Text style={styles.tagline}>Fresh from your neighborhood</Text>
         </View>
 
         {/* Login Form */}
-        <Animated.View 
-          style={[
-            styles.formContainer,
-            {
-              opacity: formFadeAnim,
-              transform: [{ translateY: formSlideAnim }]
-            }
-          ]}
-        >
-          {/* Email Input with Floating Label */}
-          <View style={styles.inputWrapper}>
-            <Animated.Text style={emailLabelStyle}>
-              Email
-            </Animated.Text>
+        <View style={styles.formContainer}>
+          {/* Email Input */}
+          <View style={styles.inputContainer}>
+            <Icon name="mail-outline" size={20} color="#666" style={styles.inputIcon} />
             <TextInput
               style={[
                 styles.textInput,
                 errors.email && styles.inputError
               ]}
-              placeholder={email ? '' : 'Email'}
-              placeholderTextColor="#808080"
+              placeholder="Email"
+              placeholderTextColor="#999"
               value={email}
               onChangeText={setEmail}
-              onFocus={handleEmailFocus}
-              onBlur={handleEmailBlur}
               keyboardType="email-address"
               autoCapitalize="none"
+              autoComplete="email"
             />
           </View>
           {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
 
-          {/* Password Input with Floating Label */}
-          <View style={styles.inputWrapper}>
-            <Animated.Text style={passwordLabelStyle}>
-              Password
-            </Animated.Text>
+          {/* Password Input */}
+          <View style={styles.inputContainer}>
+            <Icon name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
             <TextInput
               style={[
                 styles.textInput,
                 errors.password && styles.inputError
               ]}
-              placeholder={password ? '' : 'Password'}
-              placeholderTextColor="#808080"
+              placeholder="Password"
+              placeholderTextColor="#999"
               value={password}
               onChangeText={setPassword}
-              onFocus={handlePasswordFocus}
-              onBlur={handlePasswordBlur}
               secureTextEntry={!showPassword}
+              autoCapitalize="none"
             />
-            <TouchableOpacity 
-              style={styles.eyeIcon} 
-              onPress={togglePasswordVisibility}
+            <TouchableOpacity
+              style={styles.eyeIcon}
+              onPress={() => setShowPassword(!showPassword)}
             >
-              {/* <MaterialCommunityIcons 
-                name={showPassword ? "eye-off-outline" : "eye-outline"} 
-                size={20} 
-                color="#808080" 
-              /> */}
+              <Icon
+                name={showPassword ? "eye-off-outline" : "eye-outline"}
+                size={20}
+                color="#666"
+              />
             </TouchableOpacity>
           </View>
           {errors.password && <Text style={styles.errorText}>{errors.password}</Text>}
 
-          {/* Utility Options */}
-          <View style={styles.utilityContainer}>
-            <TouchableOpacity 
-              style={styles.rememberContainer}
+          {/* Remember Me & Forgot Password */}
+          <View style={styles.optionsContainer}>
+            <TouchableOpacity
+              style={styles.rememberMeContainer}
               onPress={() => setRememberMe(!rememberMe)}
             >
-              <View style={styles.checkbox}>
-                {/* {rememberMe && (
-                  <MaterialCommunityIcons name="check" size={16} color="#008080" />
-                )} */}
+              <View style={[
+                styles.checkbox,
+                rememberMe && styles.checkboxChecked
+              ]}>
+                {rememberMe && <Icon name="checkmark" size={14} color="#fff" />}
               </View>
-              <Text style={styles.rememberText}>Remember Me</Text>
+              <Text style={styles.rememberMeText}>Remember me</Text>
             </TouchableOpacity>
-            
-            <TouchableOpacity onPress={handleForgotPassword}>
+
+            <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')}>
               <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
             </TouchableOpacity>
           </View>
 
           {/* Login Button */}
-          <TouchableOpacity 
-            style={[
-              styles.loginButton,
-              isLoading && styles.loginButtonDisabled
-            ]}
-            onPress={handleLogin}
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <View style={styles.loadingContainer}>
-                <Animated.View style={styles.spinner} />
-                <Text style={styles.loginButtonText}>Signing In...</Text>
-              </View>
-            ) : (
-              <Text style={styles.loginButtonText}>LOGIN</Text>
-            )}
-          </TouchableOpacity>
+          <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
+            <TouchableOpacity
+              style={[styles.loginButton, loading && styles.loginButtonDisabled]}
+              onPress={handleLoginPress}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={styles.loginButtonText}>LOGIN</Text>
+              )}
+            </TouchableOpacity>
+          </Animated.View>
 
-          {/* Sign Up Section */}
-          <View style={styles.signUpContainer}>
-            <Text style={styles.signUpText}>Don't have an account? </Text>
-            <TouchableOpacity onPress={handleSignUp}>
-              <Text style={styles.signUpLink}>Sign Up</Text>
+          {/* Register Section */}
+          <View style={styles.registerContainer}>
+            <Text style={styles.registerText}>Don't have an account? </Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Register')}>
+              <Text style={styles.registerLink}>Sign Up</Text>
             </TouchableOpacity>
           </View>
-        </Animated.View>
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -299,171 +207,160 @@ const LoginScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#f8f9fa',
   },
   scrollContainer: {
     flexGrow: 1,
-    paddingHorizontal: 20,
-    paddingTop: height * 0.1,
-    paddingBottom: 40,
+    justifyContent: 'center',
+    paddingHorizontal: 30,
+    paddingVertical: 20,
   },
-  brandingContainer: {
+  logoContainer: {
     alignItems: 'center',
     marginBottom: 50,
   },
-  logoContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#F8F9FA',
+  logo: {
+    width: 100,
+    height: 100,
+    backgroundColor: '#e8f5e8',
+    borderRadius: 50,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: '#F1F3F4',
+    marginBottom: 15,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
-  welcomeText: {
+  appName: {
     fontSize: 28,
-    fontWeight: '600',
-    color: '#1A1A1A',
-    marginBottom: 8,
-    fontFamily: 'Poppins-SemiBold',
+    fontWeight: 'bold',
+    color: '#2E7D32',
+    marginBottom: 5,
   },
-  subtitleText: {
-    fontSize: 16,
-    color: '#808080',
-    fontFamily: 'Inter-Regular',
+  tagline: {
+    fontSize: 14,
+    color: '#666',
+    fontStyle: 'italic',
   },
   formContainer: {
-    width: '100%',
-    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 25,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
-  inputWrapper: {
-    width: '90%',
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
     marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  inputIcon: {
+    padding: 15,
   },
   textInput: {
-    width: '100%',
-    height: 56,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    borderRadius: 8,
-    paddingHorizontal: 16,
+    flex: 1,
+    paddingVertical: 15,
+    paddingRight: 15,
     fontSize: 16,
-    color: '#1A1A1A',
-    backgroundColor: '#FFFFFF',
-    fontFamily: 'Inter-Regular',
+    color: '#333',
   },
   inputError: {
-    borderColor: '#FF0000',
-  },
-  errorText: {
-    width: '90%',
-    color: '#FF0000',
-    fontSize: 12,
-    marginBottom: 16,
-    marginLeft: 4,
-    fontFamily: 'Inter-Regular',
+    borderColor: '#dc3545',
   },
   eyeIcon: {
-    position: 'absolute',
-    right: 16,
-    top: 18,
-    padding: 4,
+    padding: 15,
   },
-  utilityContainer: {
-    width: '90%',
+  errorText: {
+    color: '#dc3545',
+    fontSize: 12,
+    marginBottom: 15,
+    marginLeft: 10,
+  },
+  optionsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 32,
-    marginTop: 8,
+    marginBottom: 25,
+    marginTop: 10,
   },
-  rememberContainer: {
+  rememberMeContainer: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   checkbox: {
     width: 20,
     height: 20,
-    borderWidth: 1,
-    borderColor: '#008080',
+    borderWidth: 2,
+    borderColor: '#4CAF50',
     borderRadius: 4,
     marginRight: 8,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
   },
-  rememberText: {
+  checkboxChecked: {
+    backgroundColor: '#4CAF50',
+  },
+  rememberMeText: {
+    color: '#666',
     fontSize: 14,
-    color: '#1A1A1A',
-    fontFamily: 'Inter-Regular',
   },
   forgotPasswordText: {
+    color: '#4CAF50',
     fontSize: 14,
-    color: '#FFA500',
     fontWeight: '500',
-    fontFamily: 'Inter-Medium',
   },
   loginButton: {
-    width: '90%',
-    height: 56,
-    backgroundColor: '#008080',
-    borderRadius: 8,
-    justifyContent: 'center',
+    backgroundColor: '#4CAF50',
+    borderRadius: 12,
+    paddingVertical: 16,
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: 25,
+    shadowColor: '#4CAF50',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 4.65,
+    elevation: 8,
   },
   loginButtonDisabled: {
-    opacity: 0.7,
+    backgroundColor: '#a5d6a7',
   },
   loginButtonText: {
-    color: '#FFFFFF',
+    color: '#fff',
     fontSize: 16,
-    fontWeight: '600',
-    fontFamily: 'Inter-SemiBold',
+    fontWeight: 'bold',
   },
-  loadingContainer: {
+  registerContainer: {
     flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  spinner: {
-    width: 16,
-    height: 16,
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-    borderTopColor: 'transparent',
-    borderRadius: 8,
-    marginRight: 8,
-  },
-  signUpContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  signUpText: {
+  registerText: {
+    color: '#666',
     fontSize: 14,
-    color: '#1A1A1A',
-    fontFamily: 'Inter-Regular',
   },
-  signUpLink: {
+  registerLink: {
+    color: '#4CAF50',
     fontSize: 14,
-    color: '#FFA500',
-    fontWeight: '600',
-    fontFamily: 'Inter-SemiBold',
+    fontWeight: 'bold',
   },
 });
-
-// For font loading, you'll need to set up custom fonts in your project
-// This is how you would typically handle fonts (commented out as it requires additional setup)
-/*
-import { useFonts } from 'expo-font';
-
-const [fontsLoaded] = useFonts({
-  'Poppins-SemiBold': require('./assets/fonts/Poppins-SemiBold.ttf'),
-  'Inter-Regular': require('./assets/fonts/Inter-Regular.ttf'),
-  'Inter-Medium': require('./assets/fonts/Inter-Medium.ttf'),
-  'Inter-SemiBold': require('./assets/fonts/Inter-SemiBold.ttf'),
-});
-*/
 
 export default LoginScreen;
