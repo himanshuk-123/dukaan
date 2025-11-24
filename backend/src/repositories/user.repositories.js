@@ -112,37 +112,47 @@ export class UserRepository {
 
 
   // ✅ UPDATE PROFILE (FIXED for your table)
-  async updateUserProfile(userId, data) {
-    try {
-      const pool = await poolPromise;
+async updateUserProfile(userId, data) {
+  try {
+    const pool = await poolPromise;
 
-      const result = await pool.request()
-        .input('userId', sql.Int, userId)
-        .input('name', sql.NVarChar(255), data.name)
-        .input('phone_number', sql.NVarChar(15), data.phone_number || null)
-        .input('image_url', sql.NVarChar(500), data.image_url || null)
-        .query(`
-          UPDATE Users
-          SET 
-            name = @name,
-            phone_number = @phone_number,
-            image_url = @image_url
-          OUTPUT INSERTED.user_id,
-                 INSERTED.name,
-                 INSERTED.email,
-                 INSERTED.phone_number,
-                 INSERTED.image_url,
-                 INSERTED.created_at
-          WHERE user_id = @userId
-          AND is_deleted = 0
-        `);
-
-      return result.recordset[0] || null;
-
-    } catch (error) {
-      console.error("DB error in updateUserProfile:", error);
-      throw new Error("Failed to update user profile");
+    // Build dynamic query
+    let updateFields = `name = @name, phone_number = @phone_number`;
+    if (data.image_url) {
+      updateFields += `, image_url = @image_url`;
     }
+
+    const request = pool.request()
+      .input('userId', sql.Int, userId)
+      .input('name', sql.NVarChar(255), data.name)
+      .input('phone_number', sql.NVarChar(15), data.phone_number || null);
+
+    if (data.image_url) {
+      request.input('image_url', sql.NVarChar(500), data.image_url);
+    }
+
+    const query = `
+      UPDATE Users
+      SET ${updateFields}
+      OUTPUT INSERTED.user_id,
+             INSERTED.name,
+             INSERTED.email,
+             INSERTED.phone_number,
+             INSERTED.image_url,
+             INSERTED.created_at
+      WHERE user_id = @userId
+      AND is_deleted = 0
+    `;
+
+    const result = await request.query(query);
+
+    return result.recordset[0] || null;
+
+  } catch (error) {
+    console.error("DB error in updateUserProfile:", error);
+    throw new Error("Failed to update user profile");
   }
+}
+
 
 }

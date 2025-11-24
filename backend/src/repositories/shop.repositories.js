@@ -91,7 +91,6 @@ export class ShopRepository {
             owner_id,
             name,
             description,
-            category,
             address,
             pincode,
             latitude,

@@ -5,7 +5,7 @@ import { uploadShopImage } from '../controllers/image.controller.js';
 import { authenticate } from '../middleware/auth.middleware.js';
 import { authorize } from '../middleware/auth.middleware.js';
 import { upload, handleUploadError } from '../middleware/upload.middleware.js';
-
+import { getShopDashboard } from '../controllers/shopDashboard.controller.js';
 const router = express.Router();
 
 /**
@@ -65,5 +65,12 @@ router.put('/:id', authenticate, authorize('shopkeeper'), updateShop);
  */
 router.delete('/:id', authenticate, authorize('shopkeeper'), deleteShop);
 
+/**
+ * @route   GET /api/shop/dashboard/:shopId
+ * @desc    Get complete dashboard data for a shop
+ * @access  Private
+ */
+router.get('/dashboard/:shopId', authenticate, authorize('shopkeeper'), getShopDashboard);
 export default router;
+
 
