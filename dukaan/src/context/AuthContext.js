@@ -8,7 +8,7 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-
+  const [role,setRole] = useState('')
   // Initialize auth state on app startup
   useEffect(() => {
     loadStoredAuth();
@@ -51,6 +51,7 @@ export const AuthProvider = ({ children }) => {
         const userData = response.data.user;
         setUser(userData);
         setIsAuthenticated(true);
+        setRole(userData.role);
         const { user } = response.data;
         const {accessToken,refreshToken} = response.data.tokens;
         await AsyncStorage.setItem('accessToken', accessToken);
@@ -76,6 +77,7 @@ export const AuthProvider = ({ children }) => {
       if (response.success) {
         const newUser = response.data.user;
         setUser(newUser);
+        setRole(newUser.role);
         setIsAuthenticated(true);
         return response;
       }
@@ -172,6 +174,7 @@ const uploadProfileImage = useCallback(async (imageUri) => {
     isLoading,
     isAuthenticated,
     login,
+    role,
     register,
     logout,
     refreshUserProfile,

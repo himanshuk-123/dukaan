@@ -5,6 +5,7 @@ import { AuthProvider } from './src/context/AuthContext'
 import { CartProvider } from './src/context/CartContext'
 import { AddressProvider } from './src/context/AddressContext'
 import { OrderProvider } from './src/context/OrderContext'
+
 const App = () => {
   return (
     <AuthProvider>
@@ -14,7 +15,7 @@ const App = () => {
         {Platform.OS === 'android' && (
           <View style={{ height: StatusBar.currentHeight, backgroundColor: '#1d740cff' }} />
         )}
-        <StatusBar 
+        <StatusBar  
           backgroundColor="#086614ff" 
           style="light" 
           barStyle="light-content"

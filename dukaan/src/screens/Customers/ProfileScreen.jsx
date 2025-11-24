@@ -48,7 +48,7 @@ const ProfileScreen = ({ navigation }) => {
       setEditForm({
         name: user.name || '',
         email: user.email || '',
-        phone_number_number: user.phone_number_number || '',
+        phone_number: user.phone_number || '',
       });
     }
   }, [user]);
@@ -155,9 +155,9 @@ const ProfileScreen = ({ navigation }) => {
   // Menu options
   const profileMenu = [
     { icon: 'person-outline', label: 'Edit Profile', action: () => setShowEditModal(true) },
-    { icon: 'location-outline', label: 'My Addresses', action: () => navigation.navigate('Addresses') },
-    { icon: 'heart-outline', label: 'Wishlist', action: () => navigation.navigate('Wishlist') },
-    { icon: 'gift-outline', label: 'My Vouchers', action: () => navigation.navigate('Vouchers') },
+    { icon: 'location-outline', label: 'My Addresses', action: () => navigation.navigate('AddAddress') },
+    // { icon: 'heart-outline', label: 'Wishlist', action: () => navigation.navigate('Wishlist') },
+    // { icon: 'gift-outline', label: 'My Vouchers', action: () => navigation.navigate('Vouchers') },
     { icon: 'receipt-outline', label: 'My Orders', action: () => navigation.navigate('Orders') },
   ];
 
@@ -209,12 +209,13 @@ const ProfileScreen = ({ navigation }) => {
     try {
       setIsUpdating(true);
       
-      const updates = {
-        name: editForm.name.trim(),
-        email: editForm.email.trim(),
-        phone_number: editForm.phone_number.trim(),
-        image_url: editForm.image_url.trim(),
-      };
+const updates = {
+  name: editForm.name?.trim() || '',
+  email: editForm.email?.trim() || '',
+  phone_number: editForm.phone_number?.trim() || '',
+  image_url: editForm.image_url ? editForm.image_url.trim() : null,
+};
+
 
       await updateUserProfile(updates);
       
@@ -400,13 +401,13 @@ const ProfileScreen = ({ navigation }) => {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>phone_number_number Number</Text>
+              <Text style={styles.inputLabel}>Phone Number</Text>
               <TextInput
                 style={styles.textInput}
-                value={editForm.phone_number_number}
-                onChangeText={(text) => setEditForm(prev => ({ ...prev, phone_number_number: text }))}
-                placeholder="Enter your phone_number_number number"
-                keyboardType="phone_number_number-pad"
+                value={editForm.phone_number}
+                onChangeText={(text) => setEditForm(prev => ({ ...prev, phone_number: text }))}
+                placeholder="Enter your Phone Number"
+                keyboardType="phone-pad"
                 editable={!isUpdating}
               />
             </View>
@@ -527,7 +528,7 @@ const ProfileScreen = ({ navigation }) => {
             {renderMenuSection('Account', profileMenu)}
             
             {/* Recent Activity */}
-            <View style={styles.menuSection}>
+            {/* <View style={styles.menuSection}>
               <Text style={styles.sectionTitle}>Recent Activity</Text>
               <View style={styles.activityContainer}>
                 <View style={styles.activityItem}>
@@ -552,7 +553,7 @@ const ProfileScreen = ({ navigation }) => {
                   </View>
                 </View>
               </View>
-            </View>
+            </View> */}
           </View>
         ) : (
           <View style={styles.content}>

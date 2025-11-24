@@ -13,20 +13,24 @@ import {
   StatusBar,
   Alert,
   ActivityIndicator,
-  Touchable,
+  RefreshControl,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import CategoryService from '../../services/CategoryService';
 import { useAuth } from '../../context/AuthContext';
 const { width } = Dimensions.get('window');
 import { useNavigation } from '@react-navigation/native';
+import { useCart } from '../../context/CartContext';
 const CategoryScreen = () => {
+    const { addItem, cart} = useCart();   // <== ADD THIS at top inside component
+
   const navigation = useNavigation();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState(null);
   const scrollY = useRef(new Animated.Value(0)).current;
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const {user} = useAuth();
 
   useEffect(() => {
@@ -68,9 +72,13 @@ const CategoryScreen = () => {
     return colors[index % colors.length];
   };
 
-  const fetchCategories = async () => {
+  const fetchCategories = async (isRefreshing = false) => {
     try {
-      setLoading(true);
+      if (isRefreshing) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
       const response = await CategoryService.getAllCategories();
       
       console.log('API Response:', response);
@@ -104,7 +112,12 @@ const CategoryScreen = () => {
       Alert.alert('Error', 'Failed to load categories. Please try again.');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
+  };
+
+  const onRefresh = () => {
+    fetchCategories(true);
   };
 
   // Filter categories based on search
@@ -230,16 +243,22 @@ const CategoryScreen = () => {
           <View style={styles.headerTop}>
             <View>
               <Text style={styles.greeting}>Hello, {user.name}! 👋</Text>
-              {/* <TouchableOpacity onPress={() => navigation.navigate('ShopsList')}>
-                <Text>shops</Text>
-              </TouchableOpacity> */}
+              <Text style={styles.greeting}>{user.role}</Text>
               <Text style={styles.subGreeting}>Find shops by category</Text>
             </View>
+
+                   {/* <TouchableOpacity style={styles.cartButton} onPress={() => navigation.navigate('Cart')}>
+                             <Icon name="cart-outline" size={29} color="#ffffffff" />
+                             <View style={styles.cartBadge}>
+                               <Text style={styles.cartBadgeText}>{cart.summary?.itemCount || 0}</Text>
+                             </View>
+                           </TouchableOpacity>
+            
             <TouchableOpacity style={styles.profileButton}
             onPress={() => navigation.navigate('Profile')}
             >
               <Icon name="person-circle-outline" size={32} color="#fff" />
-            </TouchableOpacity>
+            </TouchableOpacity> */}
           </View>
 
           {/* Search Bar */}
@@ -281,6 +300,14 @@ const CategoryScreen = () => {
             <Text style={styles.emptyText}>No categories found</Text>
             <Text style={styles.emptySubText}>Try different search terms</Text>
           </View>
+        }
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={['#4CAF50']}
+            tintColor="#4CAF50"
+          />
         }
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
@@ -335,6 +362,26 @@ const styles = StyleSheet.create({
   },
   profileButton: {
     padding: 4,
+  },
+  cartButton: {
+    position: 'relative',
+    padding: 8,
+  },
+  cartBadge: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    backgroundColor: '#FF6B6B',
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cartBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
   },
   searchContainer: {
     flexDirection: 'row',

@@ -13,7 +13,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
-
+import {useOrder} from '../../context/OrderContext';
 const { width, height } = Dimensions.get('window');
 
 const OrdersScreen = ({ navigation }) => {
@@ -22,7 +22,7 @@ const OrdersScreen = ({ navigation }) => {
   const scrollY = useRef(new Animated.Value(0)).current;
 
   // Load real orders via context
-  const { fetchOrders, orders, isLoading, error } = require('../../context/OrderContext').useOrder();
+  const { fetchOrders, orders, isLoading, error } = useOrder();
 
   useEffect(() => {
     fetchOrders();
@@ -33,7 +33,7 @@ const OrdersScreen = ({ navigation }) => {
     // Normalise to UI structure expected by existing card.
     return {
       id: o.order_id?.toString() || o.order_id || o.id?.toString() || 'N/A',
-      status: 'delivered', // Placeholder until status tracking implemented
+      status: o.order_status, // Placeholder until status tracking implemented
       date: o.created_at || o.order_date || new Date().toISOString(),
       total: o.total_amount || o.total || 0,
       items: o.item_count || o.items?.length || 0,
