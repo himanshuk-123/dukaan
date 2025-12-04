@@ -12,14 +12,14 @@ export class ShopService {
    * @throws {ValidationError} When validation fails
    */
   validateShopData(shopData) {
-    const { name, category, address, pincode } = shopData;
+    const { name, cat_id, address, pincode } = shopData;
 
     if (!name || name.trim().length < 2) {
       throw new ValidationError('Shop name must be at least 2 characters long');
     }
 
-    if (!category || category.trim().length < 2) {
-      throw new ValidationError('Category is required and must be at least 2 characters long');
+    if (!cat_id) {
+      throw new ValidationError('Category is required');
     }
 
     if (!address || address.trim().length < 5) {
@@ -45,7 +45,7 @@ export class ShopService {
         owner_id: ownerId,
         name: shopData.name.trim(),
         description: shopData.description ? shopData.description.trim() : null,
-        category: shopData.category.trim(),
+        cat_id: shopData.cat_id,
         address: shopData.address.trim(),
         pincode: shopData.pincode.trim(),
         latitude: shopData.latitude || null,

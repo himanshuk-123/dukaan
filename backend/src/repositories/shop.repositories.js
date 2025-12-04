@@ -9,24 +9,24 @@ export class ShopRepository {
    */
   async create(shopData) {
     try {
-      const { owner_id, name, description, category, address, pincode, latitude, longitude } = shopData;
+      const { owner_id, name, description, cat_id, address, pincode, latitude, longitude } = shopData;
       const pool = await poolPromise;
 
       const result = await pool.request()
         .input('owner_id', sql.Int, owner_id)
         .input('name', sql.NVarChar(255), name)
         .input('description', sql.NVarChar(sql.MAX), description)
-        .input('category', sql.NVarChar(100), category)
+        .input('cat_id', sql.Int(100), cat_id)
         .input('address', sql.NVarChar(500), address)
         .input('pincode', sql.NVarChar(10), pincode)
         .input('latitude', sql.Decimal(10, 8), latitude || null)
         .input('longitude', sql.Decimal(11, 8), longitude || null)
         .query(`
-          INSERT INTO Shops (owner_id, name, description, category, address, pincode, latitude, longitude, is_active)
-          OUTPUT INSERTED.shop_id, INSERTED.owner_id, INSERTED.name, INSERTED.description, INSERTED.category,
+          INSERT INTO Shops (owner_id, name, description, cat_id, address, pincode, latitude, longitude, is_active)
+          OUTPUT INSERTED.shop_id, INSERTED.owner_id, INSERTED.name, INSERTED.description, INSERTED.cat_id,
                  INSERTED.address, INSERTED.pincode, INSERTED.latitude, INSERTED.longitude, 
                  INSERTED.is_active, INSERTED.image_url, INSERTED.created_at
-          VALUES (@owner_id, @name, @description, @category, @address, @pincode, @latitude, @longitude, 0)
+          VALUES (@owner_id, @name, @description, @cat_id, @address, @pincode, @latitude, @longitude, 1)
         `);
 
       return result.recordset[0];
@@ -52,7 +52,6 @@ export class ShopRepository {
             s.owner_id,
             s.name,
             s.description,
-            s.category,
             s.address,
             s.pincode,
             s.latitude,
@@ -117,71 +116,75 @@ export class ShopRepository {
    * @param {Object} options - Pagination options
    * @returns {Object} Shops with pagination
    */
-  async findByCategory(cat_id, options = {}) {
-    try {
-      const { page = 1, limit = 20, search = '' } = options;
-      const offset = (page - 1) * limit;
-      const pool = await poolPromise;
+async findByCategory(cat_id, options = {}) {
+  try {
+    const { page = 1, limit = 20, search = '' } = options;
+    const offset = (page - 1) * limit;
+    const pool = await poolPromise;
 
-      let searchCondition = '';
-      if (search) {
-        searchCondition = `AND (s.name LIKE @search OR s.description LIKE @search)`;
-      }
-
-      const countResult = await pool.request()
-        .input('cat_id', sql.NVarChar(100), cat_id)
-        .input('search', sql.NVarChar, `%${search}%`)
-        .query(`
-          SELECT COUNT(*) as total
-          FROM Shops s
-          WHERE s.cat_id = @cat_id AND s.is_deleted = 0 AND s.is_active = 1
-          ${searchCondition}
-        `);
-
-      const total = countResult.recordset[0].total;
-
-      const shopsResult = await pool.request()
-        .input('cat_id', sql.NVarChar(100), cat_id)
-        .input('search', sql.NVarChar, `%${search}%`)
-        .input('limit', sql.Int, limit)
-        .input('offset', sql.Int, offset)
-        .query(`
-          SELECT 
-            s.shop_id,
-            s.owner_id,
-            s.name,
-            s.description,
-            s.address,
-            s.pincode,
-            s.latitude,
-            s.longitude,
-            s.is_active,
-            s.image_url,
-            s.created_at,
-            u.name as owner_name
-          FROM Shops s
-          INNER JOIN Users u ON s.owner_id = u.user_id
-          WHERE s.cat_id = @cat_id AND s.is_deleted = 0 AND s.is_active = 1
-          ${searchCondition}
-          ORDER BY s.created_at DESC
-          OFFSET @offset ROWS
-          FETCH NEXT @limit ROWS ONLY
-        `);
-
-      return {
-        shops: shopsResult.recordset,
-        pagination: {
-          total: total,
-          page: page,
-          limit: limit,
-          totalPages: Math.ceil(total / limit)
-        }
-      };
-    } catch (error) {
-      console.error('Database error in findByCategory:', error);
-      throw new Error(`Database operation failed: ${error.message}`);
+    let searchCondition = '';
+    if (search) {
+      searchCondition = `AND (s.name LIKE @search OR s.description LIKE @search)`;
     }
+
+    const countResult = await pool.request()
+      .input('cat_id', sql.Int, parseInt(cat_id))
+      .input('search', sql.NVarChar, `%${search}%`)
+      .query(`
+        SELECT COUNT(*) as total
+        FROM Shops s
+        WHERE s.cat_id = @cat_id 
+          AND s.is_deleted = 0 
+          AND s.is_active = 1
+          ${searchCondition}
+      `);
+
+    const total = countResult.recordset[0].total;
+
+    const shopsResult = await pool.request()
+      .input('cat_id', sql.Int, parseInt(cat_id))
+      .input('search', sql.NVarChar, `%${search}%`)
+      .input('limit', sql.Int, limit)
+      .input('offset', sql.Int, offset)
+      .query(`
+        SELECT 
+          s.shop_id,
+          s.owner_id,
+          s.name,
+          s.description,
+          s.address,
+          s.pincode,
+          s.latitude,
+          s.longitude,
+          s.is_active,
+          s.image_url,
+          s.created_at
+        FROM Shops s
+        WHERE s.cat_id = @cat_id 
+          AND s.is_deleted = 0 
+          AND s.is_active = 1
+          ${searchCondition}
+        ORDER BY s.created_at DESC
+        OFFSET @offset ROWS
+        FETCH NEXT @limit ROWS ONLY
+      `);
+
+    return {
+      shops: shopsResult.recordset,
+      pagination: {
+        total: total,
+        page: page,
+        limit: limit,
+        totalPages: Math.ceil(total / limit)
+      }
+    };
+
+  } catch (error) {
+    console.error('Database error in findByCategory:', error);
+    throw new Error(`Database operation failed: ${error.message}`);
   }
+}
+
 
   /**
    * Update shop

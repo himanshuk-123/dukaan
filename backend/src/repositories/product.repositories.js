@@ -137,7 +137,7 @@ export class ProductRepository {
               AND i.is_deleted = 0
             LEFT JOIN Shops s 
               ON i.shop_id = s.shop_id
-            WHERE p.product_id = @productId
+            WHERE p.product_id = @productId AND p.is_deleted = 0
           `);
 
         return result.recordset[0] || null;
@@ -155,7 +155,7 @@ export class ProductRepository {
             image_url,
             created_at
           FROM Products
-          WHERE product_id = @productId
+          WHERE product_id = @productId AND is_deleted = 0
         `);
 
       return result.recordset[0] || null;
@@ -181,7 +181,7 @@ export class ProductRepository {
         .input('Base_Price', sql.Decimal(10, 2), Base_Price)
         .input('image_url', sql.NVarChar(500), image_url)
         .query(`
-          INSERT INTO Products (name, description, Base_Price, image_url)
+          INSERT INTO Products (name, description, Base_Price, image_url   )
           OUTPUT INSERTED.*
           VALUES (@name, @description, @Base_Price, @image_url)
         `);
@@ -270,7 +270,7 @@ export class ProductRepository {
 
   async addToInventory(shopId, productId, inventoryData) {
     try {
-      const { stock_quantity, selling_price } = inventoryData;
+      const { stock_quantity, selling_price,unit } = inventoryData;
       const pool = await poolPromise;
 
       const result = await pool.request()
@@ -278,10 +278,11 @@ export class ProductRepository {
         .input('productId', sql.Int, productId)
         .input('stock_quantity', sql.Int, stock_quantity)
         .input('selling_price', sql.Decimal(10, 2), selling_price)
+        .input('unit', sql.NVarChar(50), unit)
         .query(`
-          INSERT INTO Inventory (shop_id, product_id, stock_quantity, selling_price)
+          INSERT INTO Inventory (shop_id, product_id, stock_quantity, selling_price,unit)
           OUTPUT INSERTED.*
-          VALUES (@shopId, @productId, @stock_quantity, @selling_price)
+          VALUES (@shopId, @productId, @stock_quantity, @selling_price,@unit)
         `);
 
       return result.recordset[0];
@@ -409,7 +410,7 @@ export class ProductRepository {
           FROM Products p
           LEFT JOIN Inventory i 
             ON p.product_id = i.product_id
-          WHERE p.product_id = @productId
+          WHERE p.product_id = @productId AND p.is_deleted = 0
           GROUP BY p.product_id
         `);
 
@@ -546,6 +547,7 @@ export class ProductRepository {
           i.shop_id,
           i.stock_quantity,
           i.selling_price,
+          i.unit,
 
           s.name AS shop_name
         FROM Products p
@@ -571,6 +573,50 @@ export class ProductRepository {
 
     } catch (error) {
       console.error('Database error in findByOwner:', error);
+      throw new Error(error.message);
+    }
+  }
+
+  /* -------------------------------------------------------------------------- */
+  /*                    SOFT DELETE PRODUCT                                     */
+  /* -------------------------------------------------------------------------- */
+
+  async softDelete(productId) {
+    try {
+      const pool = await poolPromise;
+      
+      // We need to soft delete both the Product and the Inventory entries
+      const transaction = new sql.Transaction(pool);
+      await transaction.begin();
+
+      try {
+        const request = new sql.Request(transaction);
+        request.input('productId', sql.Int, productId);
+
+        // 1. Soft delete Inventory
+        await request.query(`
+          UPDATE Inventory
+          SET is_deleted = 1, deleted_at = GETDATE()
+          WHERE product_id = @productId
+        `);
+
+        // 2. Soft delete Product
+        const result = await request.query(`
+          UPDATE Products
+          SET is_deleted = 1, deleted_at = GETDATE()
+          OUTPUT INSERTED.product_id
+          WHERE product_id = @productId
+        `);
+
+        await transaction.commit();
+        return result.recordset.length > 0;
+
+      } catch (err) {
+        await transaction.rollback();
+        throw err;
+      }
+    } catch (error) {
+      console.error('Database error in softDelete:', error);
       throw new Error(error.message);
     }
   }

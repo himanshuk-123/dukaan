@@ -14,13 +14,13 @@ export class ProductService {
    * @throws {ValidationError} When validation fails
    */
   validateProductData(productData) {
-    const { name, price } = productData;
+    const { name, Base_Price } = productData;
 
     if (!name || name.trim().length < 2) {
       throw new ValidationError('Product name must be at least 2 characters long');
     }
 
-    if (price === undefined || price === null || price < 0) {
+    if (Base_Price === undefined || Base_Price === null || Base_Price < 0) {
       throw new ValidationError('Valid price (>= 0) is required');
     }
   }
@@ -97,51 +97,56 @@ export class ProductService {
    * @param {number} ownerId - Owner (user) ID (for authorization)
    * @returns {Object} Created product with inventory
    */
-  async createProduct(productData, shopId, ownerId) {
-    try {
-      // Validate product data
-      this.validateProductData(productData);
+async createProduct(productData, shopId, ownerId) {
+  const {
+    name,
+    description,
+    Base_Price,
+    stock_quantity = 0,
+    selling_price,
+    unit
+  } = productData;
 
-      // Verify shop ownership
-      const isOwner = await this.shopRepository.isOwner(shopId, ownerId);
-      if (!isOwner) {
-        throw new ValidationError('You do not have permission to add products to this shop');
-      }
+  // VALIDATE
+  if (!name || name.trim().length < 2)
+    throw new ValidationError("Product name requires at least 2 characters");
 
-      // Verify shop exists and is active
-      const shop = await this.shopRepository.findById(shopId);
-      if (!shop) {
-        throw new ValidationError('Shop not found');
-      }
+  if (Base_Price === undefined || Base_Price === null || isNaN(Number(Base_Price)))
+    throw new ValidationError("Base_Price must be a valid number");
 
-      const { name, description, price, stock_quantity = 0, selling_price } = productData;
+  const finalBasePrice = Number(Base_Price);
 
-      // Create product
-      const product = await this.productRepository.create({
-        name: name.trim(),
-        description: description ? description.trim() : null,
-        price: parseFloat(price)
-      });
+  // VERIFY SHOP OWNER
+  const isOwner = await this.shopRepository.isOwner(shopId, ownerId);
+  if (!isOwner) throw new ValidationError("You cannot add products to this shop");
 
-      // Add to inventory with shop-specific price
-      const inventoryPrice = selling_price !== undefined ? parseFloat(selling_price) : parseFloat(price);
-      const inventory = await this.productRepository.addToInventory(shopId, product.product_id, {
-        stock_quantity: parseInt(stock_quantity),
-        selling_price: inventoryPrice
-      });
+  // CREATE PRODUCT
+  const product = await this.productRepository.create({
+    name: name.trim(),
+    description: description?.trim() || null,
+    Base_Price: finalBasePrice,
+    image_url: null,
+  });
 
-      return {
-        ...product,
-        inventory: inventory
-      };
-    } catch (error) {
-      if (error instanceof ValidationError) {
-        throw error;
-      }
-      console.error('Error in createProduct service:', error);
-      throw new Error('Failed to create product');
+  // INVENTORY PRICE
+  const inventoryPrice = selling_price !== undefined
+    ? Number(selling_price)
+    : finalBasePrice;
+
+  // ADD TO INVENTORY
+  const inventory = await this.productRepository.addToInventory(
+    shopId,
+    product.product_id,
+    {
+      stock_quantity: Number(stock_quantity),
+      selling_price: inventoryPrice,
+      unit
     }
-  }
+  );
+
+  return { ...product, inventory };
+}
+
 
   /**
    * Get shopkeeper's products (shopkeeper only)

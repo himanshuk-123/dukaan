@@ -11,6 +11,8 @@ import categoryRouter from './src/routers/category.router.js';
 import shopRouter from './src/routers/shop.router.js';
 import userAddressRouter from './src/routers/userAddress.router.js'
 import orderRoutes from './src/routers/order.router.js';
+import shopOrderRoutes from "./src/routers/shop.order.router.js";
+
 // Load environment variables
 dotenv.config();
 
@@ -42,6 +44,7 @@ app.use('/api/categories', categoryRouter);
 app.use('/api/shops', shopRouter);
 app.use("/api/address", userAddressRouter);
 app.use("/api/orders", orderRoutes);
+app.use("/api/shop/orders", shopOrderRoutes);
 
 // 404 handler for unmatched routes
 app.use('*', (req, res) => {
