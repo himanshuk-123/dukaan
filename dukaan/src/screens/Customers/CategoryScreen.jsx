@@ -90,16 +90,19 @@ const CategoryScreen = () => {
       const mappedCategories = categoryData.map((category, index) => {
         // Try different possible field names from backend
         const categoryId = category.cat_id;
-        const categoryName = category.category_name || category.name || category.categoryName || 'Unknown';
-        const shopCount = category.shop_count || category.shopCount || category.shops || 0;
-        const description = category.description || `Browse ${categoryName} shops`;
+        // Ensure name is a string
+        const categoryName = typeof category.name === 'string' ? category.name : (category.name?.name || 'Unknown');
+        const shopCount = Number(category.shops) || 0;
+        // Ensure description is a string
+        const descriptionRaw = category.description;
+        const description = typeof descriptionRaw === 'string' ? descriptionRaw : (typeof descriptionRaw === 'object' ? descriptionRaw?.description : `Browse ${categoryName} shops`);
         
         return {
           id: categoryId.toString(),
           name: categoryName,
           icon: getCategoryIcon(categoryName),
           color: getCategoryColor(index),
-          description: description,
+          description: description || `Browse ${categoryName} shops`,
           shops: shopCount,
           gradient: [getCategoryColor(index), getCategoryColor(index) + 'CC'],
         };
@@ -121,10 +124,12 @@ const CategoryScreen = () => {
   };
 
   // Filter categories based on search
-  const   filteredCategories = categories.filter(category =>
-    category.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    category.description.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredCategories = categories.filter(category => {
+    const name = String(category.name || '').toLowerCase();
+    const description = String(category.description || '').toLowerCase();
+    const query = searchQuery.toLowerCase();
+    return name.includes(query) || description.includes(query);
+  });
 
   // Header animation
   const headerOpacity = scrollY.interpolate({
@@ -168,8 +173,8 @@ const CategoryScreen = () => {
               <Text style={styles.icon}>{item.icon}</Text>
             </View>
             <View style={styles.categoryInfo}>
-              <Text style={styles.categoryName}>{item.name}</Text>
-              <Text style={styles.categoryDescription}>{item.description}</Text>
+              <Text style={styles.categoryName}>{String(item.name || 'Unknown')}</Text>
+              <Text style={styles.categoryDescription}>{String(item.description || 'No description')}</Text>
             </View>
             <Icon name="chevron-forward" size={20} color={item.color} />
           </View>
@@ -207,9 +212,9 @@ const CategoryScreen = () => {
           >
             <Text style={styles.popularIcon}>{category.icon}</Text>
             <Text style={[styles.popularName, { color: category.color }]}>
-              {category.name}
+              {String(category.name || 'Unknown')}
             </Text>
-            <Text style={styles.popularShops}>{category.shops} shops</Text>
+            <Text style={styles.popularShops}>{String(category.shops || 0)} shops</Text>
           </TouchableOpacity>
         ))}
       </ScrollView>
@@ -243,7 +248,6 @@ const CategoryScreen = () => {
           <View style={styles.headerTop}>
             <View>
               <Text style={styles.greeting}>Hello, {user.name}! 👋</Text>
-              <Text style={styles.greeting}>{user.role}</Text>
               <Text style={styles.subGreeting}>Find shops by category</Text>
             </View>
 

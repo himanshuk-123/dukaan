@@ -1,9 +1,9 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_BASE_URL = 'http://10.0.2.2:3000/api';
+// const API_BASE_URL = 'http://10.221.84.184:3000/api';
 
-// const API_BASE_URL = 'https://dukaan-4jn0.onrender.com/api';
+const API_BASE_URL = 'https://dukaan-4jn0.onrender.com/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,

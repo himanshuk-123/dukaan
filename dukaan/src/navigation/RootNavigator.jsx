@@ -11,6 +11,10 @@ import CheckoutScreen from '../screens/Customers/CheckoutScreen';
 import AddAddressScreen from '../screens/Customers/AddAddressScreen';
 import OrdersScreen from '../screens/Customers/OrdersScreen';
 import ShopkeeperDashboard from '../screens/ShopKeeper/ShopkeeperDashboard';
+import ShopSelectionScreen from '../screens/ShopKeeper/ShopSelectionScreen';
+import ProductManagementScreen from '../screens/ShopKeeper/ProductManagementScreen';
+import OrderManagementScreen from '../screens/ShopKeeper/OrderManagementScreen';
+import CreateShopScreen from '../screens/ShopKeeper/CreateShopScreen'
 const Stack = createNativeStackNavigator();
 
 const AuthNavigator = () =>{
@@ -39,7 +43,11 @@ const CustomerNavigator = () => {
 const ShopKeeperNavigator = () => {
   return (
     <Stack.Navigator screenOptions={{headerShown: false}}>
+      <Stack.Screen name='ShopSelection' component={ShopSelectionScreen} />
       <Stack.Screen name='Dashboard' component={ShopkeeperDashboard} />
+      <Stack.Screen name='ProductManagement' component={ProductManagementScreen} />
+      <Stack.Screen name='OrderManagement' component={OrderManagementScreen} />
+      <Stack.Screen name='CreateShop' component={CreateShopScreen} />
     </Stack.Navigator>
   )
 }

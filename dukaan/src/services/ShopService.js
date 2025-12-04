@@ -170,6 +170,35 @@ getProductsByShop: async (shop_id, params = {}) => {
       console.error('Error uploading shop image:', error);
       throw error;
     }
+  },
+
+  /**
+   * Get shopkeeper's own shops
+   * @returns {Promise} Response with shops array
+   */
+  getMyShops: async () => {
+    try {
+      const response = await ApiService.get('/shops/my-shops');
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching my shops:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get shop dashboard data
+   * @param {number} shopId - Shop ID
+   * @returns {Promise} Dashboard data
+   */
+  getShopDashboard: async (shopId) => {
+    try {
+      const response = await ApiService.get(`/shops/dashboard/${shopId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching shop dashboard:', error);
+      throw error;
+    }
   }
 };
 
