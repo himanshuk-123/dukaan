@@ -192,70 +192,89 @@ async findByCategory(cat_id, options = {}) {
    * @param {Object} shopData - Updated shop data
    * @returns {Object} Updated shop
    */
-  async update(shopId, shopData) {
-    try {
-      const { name, description, category, address, pincode, latitude, longitude, is_active } = shopData;
-      const pool = await poolPromise;
+async update(shopId, shopData) {
+  try {
+    const { name, description, cat_id, address, pincode, latitude, longitude, is_active } = shopData;
+    const pool = await poolPromise;
 
-      const updates = [];
-      const request = pool.request().input('shopId', sql.Int, shopId);
+    const updates = [];
+    const request = pool.request().input('shopId', sql.Int, shopId);
 
-      if (name !== undefined) {
-        updates.push('name = @name');
-        request.input('name', sql.NVarChar(255), name);
-      }
-      if (description !== undefined) {
-        updates.push('description = @description');
-        request.input('description', sql.NVarChar(sql.MAX), description);
-      }
-      if (category !== undefined) {
-        updates.push('category = @category');
-        request.input('category', sql.NVarChar(100), category);
-      }
-      if (address !== undefined) {
-        updates.push('address = @address');
-        request.input('address', sql.NVarChar(500), address);
-      }
-      if (pincode !== undefined) {
-        updates.push('pincode = @pincode');
-        request.input('pincode', sql.NVarChar(10), pincode);
-      }
-      if (latitude !== undefined) {
-        updates.push('latitude = @latitude');
-        request.input('latitude', sql.Decimal(10, 8), latitude);
-      }
-      if (longitude !== undefined) {
-        updates.push('longitude = @longitude');
-        request.input('longitude', sql.Decimal(11, 8), longitude);
-      }
-      if (is_active !== undefined) {
-        updates.push('is_active = @is_active');
-        request.input('is_active', sql.Bit, is_active);
-      }
-
-      if (updates.length === 0) {
-        throw new Error('No fields to update');
-      }
-
-      const result = await request.query(`
-        UPDATE Shops
-        SET ${updates.join(', ')}
-        OUTPUT INSERTED.shop_id, INSERTED.owner_id, INSERTED.name, INSERTED.description, INSERTED.category,
-               INSERTED.address, INSERTED.pincode, INSERTED.latitude, INSERTED.longitude,
-               INSERTED.is_active, INSERTED.image_url, INSERTED.created_at
-        WHERE shop_id = @shopId AND is_deleted = 0
-      `);
-
-      if (result.recordset.length === 0) {
-        return null;
-      }
-
-      return result.recordset[0];
-    } catch (error) {
-      console.error('Database error in update shop:', error);
-      throw new Error(`Database operation failed: ${error.message}`);
+    if (name !== undefined) {
+      updates.push('name = @name');
+      request.input('name', sql.NVarChar(255), name);
     }
+
+    if (description !== undefined) {
+      updates.push('description = @description');
+      request.input('description', sql.NVarChar(sql.MAX), description);
+    }
+
+    // ✅ FIX: category → cat_id
+    if (cat_id !== undefined) {
+      updates.push('cat_id = @cat_id');
+      request.input('cat_id', sql.Int, cat_id);
+    }
+
+    if (address !== undefined) {
+      updates.push('address = @address');
+      request.input('address', sql.NVarChar(500), address);
+    }
+
+    if (pincode !== undefined) {
+      updates.push('pincode = @pincode');
+      request.input('pincode', sql.NVarChar(10), pincode);
+    }
+
+    if (latitude !== undefined) {
+      updates.push('latitude = @latitude');
+      request.input('latitude', sql.Decimal(10, 8), latitude);
+    }
+
+    if (longitude !== undefined) {
+      updates.push('longitude = @longitude');
+      request.input('longitude', sql.Decimal(11, 8), longitude);
+    }
+
+    if (is_active !== undefined) {
+      updates.push('is_active = @is_active');
+      request.input('is_active', sql.Bit, is_active);
+    }
+
+    if (updates.length === 0) {
+      throw new Error('No fields to update');
+    }
+
+    const result = await request.query(`
+      UPDATE Shops
+      SET ${updates.join(', ')}
+      OUTPUT 
+        INSERTED.shop_id,
+        INSERTED.owner_id,
+        INSERTED.name,
+        INSERTED.description,
+        INSERTED.cat_id,        -- FIXED
+        INSERTED.address,
+        INSERTED.pincode,
+        INSERTED.latitude,
+        INSERTED.longitude,
+        INSERTED.is_active,
+        INSERTED.image_url,
+        INSERTED.created_at
+      WHERE shop_id = @shopId AND is_deleted = 0
+    `);
+
+    if (result.recordset.length === 0) {
+      return null;
+    }
+
+    return result.recordset[0];
+
+  } catch (error) {
+    console.error('Database error in update shop:', error);
+    throw new Error(`Database operation failed: ${error.message}`);
   }
+}
 
   /**
    * Soft delete shop
