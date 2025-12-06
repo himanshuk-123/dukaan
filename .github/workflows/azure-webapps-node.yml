@@ -25,7 +25,7 @@ on:
 env:
   AZURE_WEBAPP_NAME: dukaan                 # <-- change this to your App Service name
   AZURE_WEBAPP_PACKAGE_PATH: '.'           
-  NODE_VERSION: '22.x'
+  NODE_VERSION: '20.x'
 
 permissions:
   contents: read
